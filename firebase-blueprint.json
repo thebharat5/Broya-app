@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Information about the user and their credits.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "standardCredits": { "type": "integer" },
+        "proCredits": { "type": "integer" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "standardCredits", "proCredits", "role"]
+    },
+    "Generation": {
+      "title": "Generation",
+      "description": "A record of an image generation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "model": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["standard", "pro"] }
+      },
+      "required": ["userId", "model", "timestamp", "type"]
+    },
+    "GlobalStats": {
+      "title": "GlobalStats",
+      "description": "Aggregated statistics for the admin.",
+      "type": "object",
+      "properties": {
+        "totalUsers": { "type": "integer" },
+        "totalGenerations": { "type": "integer" },
+        "totalAdsWatched": { "type": "integer" },
+        "totalRevenue": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and credit balance."
+    },
+    "/generations/{genId}": {
+      "schema": "Generation",
+      "description": "History of all image generations."
+    },
+    "/stats/global": {
+      "schema": "GlobalStats",
+      "description": "Global business metrics."
+    }
+  }
+}

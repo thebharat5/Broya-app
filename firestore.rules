@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (string)
+    // Fields:
+    //   - uid: string (required) - The user's unique ID
+    //   - email: string (required) - The user's email address
+    //   - displayName: string (optional) - The user's display name
+    //   - standardCredits: number (required) - The number of standard credits
+    //   - proCredits: number (required) - The number of pro credits
+    //   - role: string (required) - The user's role (admin, user)
+    //   - createdAt: timestamp (required) - The time the user was created
+    //
+    // Collection: generations
+    // Document ID: genId (string)
+    // Fields:
+    //   - userId: string (required) - The user's unique ID
+    //   - model: string (required) - The model used for generation
+    //   - timestamp: timestamp (required) - The time of generation
+    //   - type: string (required) - The type of generation (standard, pro)
+    //
+    // Collection: stats
+    // Document ID: global (string)
+    // Fields:
+    //   - totalUsers: number (optional)
+    //   - totalGenerations: number (optional)
+    //   - totalAdsWatched: number (optional)
+    //   - totalRevenue: number (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "thebharat555@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'standardCredits', 'proCredits', 'role', 'createdAt']) &&
+             hasOnlyAllowedFields(['uid', 'email', 'displayName', 'standardCredits', 'proCredits', 'role', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.email == request.auth.token.email &&
+             isValidEmail(data.email) &&
+             data.standardCredits is number && data.standardCredits >= 0 &&
+             data.proCredits is number && data.proCredits >= 0 &&
+             data.role in ['admin', 'user'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidGeneration(data) {
+      return hasRequiredFields(['userId', 'model', 'timestamp', 'type']) &&
+             hasOnlyAllowedFields(['userId', 'model', 'timestamp', 'type']) &&
+             data.userId == request.auth.uid &&
+             data.model is string &&
+             data.timestamp is timestamp &&
+             data.type in ['standard', 'pro'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /generations/{genId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidGeneration(request.resource.data);
+    }
+
+    match /stats/global {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
