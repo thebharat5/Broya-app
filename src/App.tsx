@@ -78,21 +78,13 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 function BroyaLogo({ size = 24 }: { size?: number }) {
-  const [error, setError] = useState(false);
-
-  if (error) {
-    return <Sparkles size={size} className="text-[#9D88FF]" />;
-  }
-
   return (
     <img 
-      src="/broya-logo.jpg?v=1.0.3" 
+      src="/logo.jpg?v=5" 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-lg"
-      referrerPolicy="no-referrer"
-      onError={() => setError(true)}
     />
   );
 }
@@ -233,20 +225,19 @@ function MainApp() {
       }
     };
     
-    const fetchUsers = async () => {
-      try {
-        const q = query(collection(db, "users"), orderBy("createdAt", "desc"), limit(20));
-        const snap = await getDocs(q);
-        setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.LIST, "users");
-      }
-    };
+    // Fetch users list with real-time updates
+    const unsubscribeUsers = onSnapshot(query(collection(db, "users"), orderBy("createdAt", "desc"), limit(50)), (snap) => {
+      setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, "users");
+    });
 
     fetchRecent();
-    fetchUsers();
 
-    return () => unsubscribeStats();
+    return () => {
+      unsubscribeStats();
+      unsubscribeUsers();
+    };
   }, [isAdmin]);
 
   const handleLogin = async () => {
@@ -512,7 +503,7 @@ function MainApp() {
       <header className="border-b border-neutral-800 bg-neutral-950/90 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <BroyaLogo size={40} />
+            <BroyaLogo size={48} />
             <h1 className="text-xl font-bold tracking-tight">Broya</h1>
           </div>
           
@@ -1095,6 +1086,7 @@ function MainApp() {
 function AdminDashboard({ stats, generations, users, onClose }: { stats: any, generations: any[], users: any[], onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<'stats' | 'users'>('stats');
   const [searchTerm, setSearchTerm] = useState('');
+  const [giftAmount, setGiftAmount] = useState<number>(10);
 
   const filteredUsers = users.filter(u => 
     (u.displayName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -1108,10 +1100,6 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
       await updateDoc(userRef, {
         [type === 'standard' ? 'standardCredits' : 'proCredits']: increment(amount)
       });
-      // The list will update automatically if there's a listener, 
-      // but since fetchUsers is called in a useEffect in App, 
-      // we might need to wait for the next fetch or use onSnapshot for users too.
-      // For now, alert is fine.
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
     }
@@ -1227,16 +1215,32 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
               <Users size={20} className="text-[#9D88FF]" />
               Registered Users ({filteredUsers.length})
             </h3>
-            <div className="relative w-full md:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
-              <input 
-                type="text"
-                placeholder="Search name, email or ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-sm focus:outline-none focus:border-[#9D88FF] transition-colors"
-              />
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+                <input 
+                  type="text"
+                  placeholder="Search name, email or ID..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-sm focus:outline-none focus:border-[#9D88FF] transition-colors"
+                />
+              </div>
+              <button className="px-4 py-2 bg-[#9D88FF] text-white rounded-xl text-sm font-bold hover:bg-[#8A75FF] transition-colors flex items-center gap-2">
+                <Search size={16} />
+                Search
+              </button>
             </div>
+          </div>
+          <div className="px-6 py-3 bg-neutral-800/30 border-b border-neutral-800 flex items-center gap-4">
+            <span className="text-xs font-bold text-neutral-500 uppercase">Gift Amount:</span>
+            <input 
+              type="number" 
+              value={giftAmount}
+              onChange={(e) => setGiftAmount(parseInt(e.target.value) || 0)}
+              className="w-20 px-3 py-1 bg-neutral-950 border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-[#9D88FF]"
+            />
+            <p className="text-[10px] text-neutral-500 italic">Set amount here, then click +Std or +Pro below to gift.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -1263,46 +1267,26 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] text-neutral-500 uppercase font-bold">Standard</span>
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={() => handleGiveCredits(u.id, 'standard', 5)}
-                              className="p-1 bg-neutral-800 rounded hover:bg-neutral-700 text-emerald-500 transition-colors"
-                              title="Add 5 Standard Credits"
-                            >
-                              <Plus size={14} />
-                            </button>
-                            <button 
-                              onClick={() => handleGiveCredits(u.id, 'standard', -5)}
-                              className="p-1 bg-neutral-800 rounded hover:bg-neutral-700 text-red-500 transition-colors"
-                              title="Remove 5 Standard Credits"
-                            >
-                              <Minus size={14} />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="w-px h-8 bg-neutral-800" />
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] text-neutral-500 uppercase font-bold">Pro</span>
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={() => handleGiveCredits(u.id, 'pro', 10)}
-                              className="p-1 bg-neutral-800 rounded hover:bg-neutral-700 text-emerald-500 transition-colors"
-                              title="Add 10 Pro Credits"
-                            >
-                              <Plus size={14} />
-                            </button>
-                            <button 
-                              onClick={() => handleGiveCredits(u.id, 'pro', -10)}
-                              className="p-1 bg-neutral-800 rounded hover:bg-neutral-700 text-red-500 transition-colors"
-                              title="Remove 10 Pro Credits"
-                            >
-                              <Minus size={14} />
-                            </button>
-                          </div>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handleGiveCredits(u.id, 'standard', giftAmount)}
+                          className="px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded text-[10px] font-bold hover:bg-emerald-500/20 transition-colors border border-emerald-500/20"
+                        >
+                          +{giftAmount} Std
+                        </button>
+                        <button 
+                          onClick={() => handleGiveCredits(u.id, 'pro', giftAmount)}
+                          className="px-2 py-1 bg-[#9D88FF]/10 text-[#9D88FF] rounded text-[10px] font-bold hover:bg-[#9D88FF]/20 transition-colors border border-[#9D88FF]/20"
+                        >
+                          +{giftAmount} Pro
+                        </button>
+                        <button 
+                          onClick={() => handleGiveCredits(u.id, 'standard', -giftAmount)}
+                          className="p-1 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition-colors border border-red-500/20"
+                          title={`Remove ${giftAmount} Standard`}
+                        >
+                          <Minus size={12} />
+                        </button>
                       </div>
                     </td>
                     <td className="px-6 py-4">
