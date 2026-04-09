@@ -92,15 +92,15 @@ function BroyaLogo({ size = 24 }: { size?: number }) {
 
   return (
     <img 
-      src={`/logobroya.jpg?v=${timestamp}`} 
+      src={`/rabbit.png?v=${timestamp}`} 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-xl shadow-sm"
-      onLoad={() => console.log("Logo loaded successfully from /logobroya.jpg")}
+      onLoad={() => console.log("Logo loaded successfully from /rabbit.png")}
       onError={(e) => {
         // Log only the message to avoid circular structure issues in some environments
-        console.error("Logo failed to load from /logobroya.jpg", e.toString());
+        console.error("Logo failed to load from /rabbit.png", e.toString());
         setError(true);
       }}
     />
