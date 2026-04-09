@@ -78,14 +78,21 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 function BroyaLogo({ size = 24 }: { size?: number }) {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return <Sparkles size={size} className="text-[#9D88FF]" />;
+  }
+
   return (
     <img 
-      src="/logo.jpg?v=1.0.2" 
+      src="/broya-logo.jpg?v=1.0.3" 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-lg"
       referrerPolicy="no-referrer"
+      onError={() => setError(true)}
     />
   );
 }
