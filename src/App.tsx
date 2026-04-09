@@ -10,6 +10,9 @@ import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
+import rabbit from "./assets/rabbit.png";
+
+<img src={rabbit} alt="rabbit" />
 
 declare global {
   interface Window {
