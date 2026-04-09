@@ -91,13 +91,14 @@ function BroyaLogo({ size = 24 }: { size?: number }) {
 
   return (
     <img 
-      src="/broya-brand-v2.jpg" 
+      src="/broya-logo-final.jpg?v=1" 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-xl shadow-sm"
+      onLoad={() => console.log("Logo loaded successfully: /broya-logo-final.jpg")}
       onError={(e) => {
-        console.error("Logo failed to load at /broya-brand-v2.jpg", e);
+        console.error("Logo failed to load at /broya-logo-final.jpg", e);
         setError(true);
       }}
     />
