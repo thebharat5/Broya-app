@@ -111,6 +111,7 @@ function MainApp() {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [globalStats, setGlobalStats] = useState<any>(null);
   const [recentGenerations, setRecentGenerations] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
 
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
@@ -160,6 +161,10 @@ function MainApp() {
             setStandardCredits(3);
             setProCredits(0);
             setIsAdmin(newUser.role === "admin");
+
+            // Increment total users in global stats
+            const statsRef = doc(db, "stats", "global");
+            await setDoc(statsRef, { totalUsers: increment(1) }, { merge: true });
           } else {
             const data = userDoc.data();
             setStandardCredits(data.standardCredits || 0);
@@ -198,7 +203,19 @@ function MainApp() {
           handleFirestoreError(err, OperationType.LIST, "generations");
         }
       };
+      
+      const fetchUsers = async () => {
+        try {
+          const q = query(collection(db, "users"), orderBy("createdAt", "desc"), limit(20));
+          const snap = await getDocs(q);
+          setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (err) {
+          handleFirestoreError(err, OperationType.LIST, "users");
+        }
+      };
+
       fetchRecent();
+      fetchUsers();
     }
 
     const checkApiKey = async () => {
@@ -219,9 +236,12 @@ function MainApp() {
 
   const handleLogin = async () => {
     try {
+      console.log("Attempting login...");
       await signInWithPopup(auth, googleProvider);
-    } catch (err) {
+      console.log("Login successful");
+    } catch (err: any) {
       console.error("Login failed", err);
+      alert("Login failed: " + (err.message || "Unknown error") + "\n\nCommon fix: Make sure 'broyaai.space' is added to 'Authorized domains' in your Firebase Console (Authentication -> Settings).");
     }
   };
 
@@ -448,11 +468,15 @@ function MainApp() {
       }
     } catch (err: any) {
       console.error("Generation error:", err);
-      if (err.message?.includes("Requested entity was not found")) {
+      const errorMessage = err.message || "";
+      
+      if (errorMessage.includes("Requested entity was not found")) {
         setHasApiKey(false);
         setError("API Key error. Please re-select your API key.");
+      } else if (errorMessage.includes("quota") || errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
+        setError("The AI is currently busy (Free Tier limit reached). Please wait 60 seconds and try again, or upgrade to Pro Mode.");
       } else {
-        setError(err.message || "Failed to generate image. Please try again.");
+        setError(errorMessage || "Failed to generate image. Please try again.");
       }
     } finally {
       setIsGenerating(false);
@@ -519,7 +543,12 @@ function MainApp() {
       {showLanding ? (
         <LandingPage onStart={() => setShowLanding(false)} />
       ) : showAdminPanel && isAdmin ? (
-        <AdminDashboard stats={globalStats} generations={recentGenerations} onClose={() => setShowAdminPanel(false)} />
+        <AdminDashboard 
+          stats={globalStats} 
+          generations={recentGenerations} 
+          users={allUsers}
+          onClose={() => setShowAdminPanel(false)} 
+        />
       ) : (
         <>
           <main className="max-w-6xl mx-auto px-6 py-8">
@@ -1050,7 +1079,9 @@ function MainApp() {
   );
 }
 
-function AdminDashboard({ stats, generations, onClose }: { stats: any, generations: any[], onClose: () => void }) {
+function AdminDashboard({ stats, generations, users, onClose }: { stats: any, generations: any[], users: any[], onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState<'stats' | 'users'>('stats');
+
   return (
     <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
       <div className="flex items-center justify-between">
@@ -1058,83 +1089,148 @@ function AdminDashboard({ stats, generations, onClose }: { stats: any, generatio
           <h2 className="text-3xl font-bold text-white">Admin Dashboard</h2>
           <p className="text-neutral-400">Business performance and user activity overview.</p>
         </div>
-        <button onClick={onClose} className="p-2 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white">
-          <X size={24} />
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="flex bg-neutral-900 p-1 rounded-xl border border-neutral-800">
+            <button 
+              onClick={() => setActiveTab('stats')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'stats' ? 'bg-[#9D88FF] text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+            >
+              Overview
+            </button>
+            <button 
+              onClick={() => setActiveTab('users')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-[#9D88FF] text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+            >
+              Users List
+            </button>
+          </div>
+          <button onClick={onClose} className="p-2 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white">
+            <X size={24} />
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard icon={<Users className="text-blue-500" />} label="Total Users" value={stats?.totalUsers || 0} trend="+12%" />
-        <StatCard icon={<ImageIcon className="text-[#9D88FF]" />} label="Total Images" value={stats?.totalGenerations || 0} trend="+45%" />
-        <StatCard icon={<PlayCircle className="text-amber-500" />} label="Ads Watched" value={stats?.totalAdsWatched || 0} trend="+28%" />
-        <StatCard icon={<TrendingUp className="text-emerald-500" />} label="Total Revenue" value={`$${stats?.totalRevenue || 0}`} trend="+15%" />
-      </div>
+      {activeTab === 'stats' ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard icon={<Users className="text-blue-500" />} label="Total Users" value={stats?.totalUsers || 0} trend="+12%" />
+            <StatCard icon={<ImageIcon className="text-[#9D88FF]" />} label="Total Images" value={stats?.totalGenerations || 0} trend="+45%" />
+            <StatCard icon={<PlayCircle className="text-amber-500" />} label="Ads Watched" value={stats?.totalAdsWatched || 0} trend="+28%" />
+            <StatCard icon={<TrendingUp className="text-emerald-500" />} label="Total Revenue" value={`$${stats?.totalRevenue || 0}`} trend="+15%" />
+          </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden">
-          <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden">
+              <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  <BarChart3 size={20} className="text-[#9D88FF]" />
+                  Recent Generations
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-xs font-bold text-neutral-500 uppercase tracking-wider border-b border-neutral-800">
+                      <th className="px-6 py-4">User ID</th>
+                      <th className="px-6 py-4">Model</th>
+                      <th className="px-6 py-4">Type</th>
+                      <th className="px-6 py-4">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800">
+                    {generations.map((gen) => (
+                      <tr key={gen.id} className="text-sm text-neutral-300 hover:bg-neutral-800/50 transition-colors">
+                        <td className="px-6 py-4 font-mono text-xs">{gen.userId.substring(0, 8)}...</td>
+                        <td className="px-6 py-4">{gen.model.split('-')[1]}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${gen.type === 'pro' ? 'bg-[#9D88FF]/20 text-[#9D88FF]' : 'bg-neutral-800 text-neutral-500'}`}>
+                            {gen.type}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-neutral-500">{gen.timestamp?.toDate().toLocaleTimeString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 space-y-6">
+              <h3 className="font-bold text-white">Revenue Breakdown</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-neutral-950 rounded-2xl border border-neutral-800">
+                  <div className="space-y-1">
+                    <p className="text-xs text-neutral-500 font-bold uppercase">Ad Revenue (Est.)</p>
+                    <p className="text-xl font-bold text-white">${((stats?.totalAdsWatched || 0) * 0.01).toFixed(2)}</p>
+                  </div>
+                  <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
+                    <TrendingUp size={20} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-neutral-950 rounded-2xl border border-neutral-800">
+                  <div className="space-y-1">
+                    <p className="text-xs text-neutral-500 font-bold uppercase">Pro Sales</p>
+                    <p className="text-xl font-bold text-white">${stats?.totalRevenue || 0}</p>
+                  </div>
+                  <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
+                    <TrendingUp size={20} />
+                  </div>
+                </div>
+              </div>
+              <div className="pt-4 border-t border-neutral-800">
+                <p className="text-sm text-neutral-400 leading-relaxed">
+                  Earnings are calculated based on $0.01 per ad view and $5.00 per Pro Credit pack.
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden">
+          <div className="p-6 border-b border-neutral-800">
             <h3 className="font-bold text-white flex items-center gap-2">
-              <BarChart3 size={20} className="text-[#9D88FF]" />
-              Recent Generations
+              <Users size={20} className="text-[#9D88FF]" />
+              Registered Users
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="text-xs font-bold text-neutral-500 uppercase tracking-wider border-b border-neutral-800">
-                  <th className="px-6 py-4">User ID</th>
-                  <th className="px-6 py-4">Model</th>
-                  <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Time</th>
+                  <th className="px-6 py-4">Name</th>
+                  <th className="px-6 py-4">Email</th>
+                  <th className="px-6 py-4">Credits (Std/Pro)</th>
+                  <th className="px-6 py-4">Role</th>
+                  <th className="px-6 py-4">Joined</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800">
-                {generations.map((gen) => (
-                  <tr key={gen.id} className="text-sm text-neutral-300 hover:bg-neutral-800/50 transition-colors">
-                    <td className="px-6 py-4 font-mono text-xs">{gen.userId.substring(0, 8)}...</td>
-                    <td className="px-6 py-4">{gen.model.split('-')[1]}</td>
+                {users.map((u) => (
+                  <tr key={u.id} className="text-sm text-neutral-300 hover:bg-neutral-800/50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-white">{u.displayName || 'Guest'}</td>
+                    <td className="px-6 py-4 text-neutral-400">{u.email}</td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${gen.type === 'pro' ? 'bg-[#9D88FF]/20 text-[#9D88FF]' : 'bg-neutral-800 text-neutral-500'}`}>
-                        {gen.type}
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-bold">{u.standardCredits}</span>
+                        <span className="text-neutral-600">/</span>
+                        <span className="text-[#9D88FF] font-bold">{u.proCredits}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${u.role === 'admin' ? 'bg-amber-500/20 text-amber-500' : 'bg-neutral-800 text-neutral-500'}`}>
+                        {u.role}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-neutral-500">{gen.timestamp?.toDate().toLocaleTimeString()}</td>
+                    <td className="px-6 py-4 text-neutral-500">
+                      {u.createdAt?.toDate ? u.createdAt.toDate().toLocaleDateString() : 'N/A'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
-
-        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 space-y-6">
-          <h3 className="font-bold text-white">Revenue Breakdown</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-neutral-950 rounded-2xl border border-neutral-800">
-              <div className="space-y-1">
-                <p className="text-xs text-neutral-500 font-bold uppercase">Ad Revenue (Est.)</p>
-                <p className="text-xl font-bold text-white">${((stats?.totalAdsWatched || 0) * 0.01).toFixed(2)}</p>
-              </div>
-              <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
-                <TrendingUp size={20} />
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-neutral-950 rounded-2xl border border-neutral-800">
-              <div className="space-y-1">
-                <p className="text-xs text-neutral-500 font-bold uppercase">Pro Sales</p>
-                <p className="text-xl font-bold text-white">${stats?.totalRevenue || 0}</p>
-              </div>
-              <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
-                <TrendingUp size={20} />
-              </div>
-            </div>
-          </div>
-          <div className="pt-4 border-t border-neutral-800">
-            <p className="text-sm text-neutral-400 leading-relaxed">
-              Earnings are calculated based on $0.01 per ad view and $5.00 per Pro Credit pack.
-            </p>
-          </div>
-        </div>
-      </div>
+      )}
     </main>
   );
 }
