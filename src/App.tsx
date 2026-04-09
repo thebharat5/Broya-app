@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key, PlayCircle, X, LogIn, LogOut, Shield, Users, BarChart3, TrendingUp } from "lucide-react";
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { Analytics } from "@vercel/analytics/react";
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
 
 declare global {
@@ -78,7 +79,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 function BroyaLogo({ size = 24 }: { size?: number }) {
   return (
     <img 
-      src="/logo.jpg" 
+      src="/logo.jpg?v=1.0.2" 
       alt="Broya Logo" 
       width={size}
       height={size}
@@ -92,6 +93,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <MainApp />
+      <Analytics />
     </ErrorBoundary>
   );
 }
