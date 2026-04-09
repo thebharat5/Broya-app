@@ -78,7 +78,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 function BroyaLogo({ size = 24 }: { size?: number }) {
   return (
     <img 
-      src="/logo.png" 
+      src="/logo.jpg" 
       alt="Broya Logo" 
       width={size}
       height={size}
@@ -1256,18 +1256,18 @@ function StatCard({ icon, label, value, trend }: { icon: ReactNode, label: strin
 
 function LandingPage({ onStart }: { onStart: () => void }) {
   const row1 = [
-    "https://picsum.photos/seed/product1/600/800",
-    "https://picsum.photos/seed/product2/600/800",
-    "https://picsum.photos/seed/product3/600/800",
-    "https://picsum.photos/seed/product4/600/800",
-    "https://picsum.photos/seed/product5/600/800",
+    "https://picsum.photos/seed/perfume/600/800",
+    "https://picsum.photos/seed/watch/600/800",
+    "https://picsum.photos/seed/shoes/600/800",
+    "https://picsum.photos/seed/camera/600/800",
+    "https://picsum.photos/seed/skincare/600/800",
   ];
   const row2 = [
-    "https://picsum.photos/seed/product6/600/800",
-    "https://picsum.photos/seed/product7/600/800",
-    "https://picsum.photos/seed/product8/600/800",
-    "https://picsum.photos/seed/product9/600/800",
-    "https://picsum.photos/seed/product10/600/800",
+    "https://picsum.photos/seed/headphones/600/800",
+    "https://picsum.photos/seed/bottle/600/800",
+    "https://picsum.photos/seed/jewelry/600/800",
+    "https://picsum.photos/seed/gadget/600/800",
+    "https://picsum.photos/seed/fashion/600/800",
   ];
 
   return (
