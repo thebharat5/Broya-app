@@ -10,6 +10,7 @@ import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
+import logoAsset from "./assets/logo.jpg";
 
 declare global {
   interface Window {
@@ -91,14 +92,14 @@ function BroyaLogo({ size = 24 }: { size?: number }) {
 
   return (
     <img 
-      src="/broya-logo-final.jpg?v=1" 
+      src={logoAsset} 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-xl shadow-sm"
-      onLoad={() => console.log("Logo loaded successfully: /broya-logo-final.jpg")}
+      onLoad={() => console.log("Logo loaded successfully from assets")}
       onError={(e) => {
-        console.error("Logo failed to load at /broya-logo-final.jpg", e);
+        console.error("Logo failed to load from assets", e);
         setError(true);
       }}
     />
@@ -1109,14 +1110,25 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
   );
 
   const handleGiveCredits = async (userId: string, type: 'standard' | 'pro', amount: number) => {
+    if (!amount || amount === 0) {
+      alert("Please enter a valid amount to gift.");
+      return;
+    }
+
     try {
       console.log(`Admin attempting to give ${amount} ${type} credits to ${userId}`);
       const userRef = doc(db, "users", userId);
+      
+      // Optimistic alert
+      const confirmUpdate = window.confirm(`Are you sure you want to add ${amount} ${type} credits to this user?`);
+      if (!confirmUpdate) return;
+
       await updateDoc(userRef, {
         [type === 'standard' ? 'standardCredits' : 'proCredits']: increment(amount)
       });
-      console.log(`Successfully gave ${amount} ${type} credits to ${userId}`);
-      alert(`Success! Updated ${type} credits by ${amount}.`);
+      
+      console.log(`Successfully updated ${type} credits by ${amount} for ${userId}`);
+      alert(`Success! Added ${amount} ${type} credits.`);
     } catch (err: any) {
       console.error("Failed to update credits:", err);
       alert(`Error: ${err.message || "Failed to update credits. Check console for details."}`);
@@ -1242,10 +1254,19 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
                   placeholder="Search name, email or ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      // Trigger search (already filtered by state, but for UX)
+                      console.log("Searching for:", searchTerm);
+                    }
+                  }}
                   className="w-full pl-10 pr-4 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-sm focus:outline-none focus:border-[#9D88FF] transition-colors"
                 />
               </div>
-              <button className="px-4 py-2 bg-[#9D88FF] text-white rounded-xl text-sm font-bold hover:bg-[#8A75FF] transition-colors flex items-center gap-2">
+              <button 
+                onClick={() => console.log("Searching for:", searchTerm)}
+                className="px-4 py-2 bg-[#9D88FF] text-white rounded-xl text-sm font-bold hover:bg-[#8A75FF] transition-colors flex items-center gap-2"
+              >
                 <Search size={16} />
                 Search
               </button>
