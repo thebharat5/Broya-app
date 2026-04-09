@@ -9,8 +9,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key, PlayCircle, X, LogIn, LogOut, Shield, Users, BarChart3, TrendingUp, Search, Plus, Minus } from "lucide-react";
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/react";
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
 
 declare global {
@@ -78,13 +76,30 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 function BroyaLogo({ size = 24 }: { size?: number }) {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return (
+      <div 
+        style={{ width: size, height: size }} 
+        className="bg-neutral-900 rounded-xl flex items-center justify-center border border-neutral-800 shadow-inner"
+      >
+        <div className="text-[#9D88FF] font-black text-xs italic">B</div>
+      </div>
+    );
+  }
+
   return (
     <img 
-      src="/logo.jpg?v=5" 
+      src="/logo.jpg?v=11" 
       alt="Broya Logo" 
       width={size}
       height={size}
-      className="object-contain rounded-lg"
+      className="object-contain rounded-xl shadow-sm"
+      onError={() => {
+        console.error("Logo failed to load at /logo.jpg");
+        setError(true);
+      }}
     />
   );
 }
@@ -93,8 +108,6 @@ export default function App() {
   return (
     <ErrorBoundary>
       <MainApp />
-      <Analytics />
-      <SpeedInsights />
     </ErrorBoundary>
   );
 }
@@ -1100,7 +1113,10 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
       await updateDoc(userRef, {
         [type === 'standard' ? 'standardCredits' : 'proCredits']: increment(amount)
       });
+      console.log(`Successfully gave ${amount} ${type} credits to ${userId}`);
+      alert(`Success! Added ${amount} ${type} credits.`);
     } catch (err) {
+      console.error("Failed to update credits:", err);
       handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
     }
   };
