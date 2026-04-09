@@ -10,9 +10,6 @@ import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
-import rabbit from "./assets/rabbit.png";
-
-<img src={rabbit} alt="rabbit" />
 
 declare global {
   interface Window {
@@ -95,15 +92,15 @@ function BroyaLogo({ size = 24 }: { size?: number }) {
 
   return (
     <img 
-      src={`/rabbit.png?v=${timestamp}`} 
+      src={`/logobroya.jpg?v=${timestamp}`} 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-xl shadow-sm"
-      onLoad={() => console.log("Logo loaded successfully from /rabbit.png")}
+      onLoad={() => console.log("Logo loaded successfully from /logobroya.jpg")}
       onError={(e) => {
         // Log only the message to avoid circular structure issues in some environments
-        console.error("Logo failed to load from /rabbit.png", e.toString());
+        console.error("Logo failed to load from /logobroya.jpg", e.toString());
         setError(true);
       }}
     />
