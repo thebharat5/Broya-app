@@ -77,21 +77,14 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
 function BroyaLogo({ size = 24 }: { size?: number }) {
   return (
-    <svg 
-      width={size} 
-      height={size} 
-      viewBox="0 0 100 100" 
-      fill="none" 
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path 
-        d="M22 48C18 55 25 72 40 72C55 72 60 55 55 40C50 25 42 22 42 32C42 42 50 65 50 82C50 95 62 95 68 82C74 68 82 68 82 82C82 95 92 92 92 82C92 75 85 75 80 80C75 85 80 90 85 88" 
-        stroke="white" 
-        strokeWidth="4.5" 
-        strokeLinecap="round" 
-        strokeLinejoin="round"
-      />
-    </svg>
+    <img 
+      src="/logo.png" 
+      alt="Broya Logo" 
+      width={size}
+      height={size}
+      className="object-contain rounded-lg"
+      referrerPolicy="no-referrer"
+    />
   );
 }
 
@@ -136,7 +129,9 @@ function MainApp() {
     if (!apiKey || apiKey === "") {
       setIsKeyMissing(true);
     }
+  }, []);
 
+  useEffect(() => {
     // Auth Listener
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
@@ -169,7 +164,15 @@ function MainApp() {
             const data = userDoc.data();
             setStandardCredits(data.standardCredits || 0);
             setProCredits(data.proCredits || 0);
-            setIsAdmin(data.role === "admin");
+            
+            // Always check email as fallback and update Firestore if needed
+            const isOwnerEmail = firebaseUser.email === "thebharat555@gmail.com";
+            if (isOwnerEmail && data.role !== "admin") {
+              await updateDoc(userRef, { role: "admin" });
+              setIsAdmin(true);
+            } else {
+              setIsAdmin(data.role === "admin" || isOwnerEmail);
+            }
           }
         } catch (err) {
           handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
@@ -184,40 +187,6 @@ function MainApp() {
       }
     });
 
-    // Admin Stats Listener
-    let unsubscribeStats: (() => void) | undefined;
-    if (isAdmin) {
-      unsubscribeStats = onSnapshot(doc(db, "stats", "global"), (doc) => {
-        setGlobalStats(doc.data());
-      }, (err) => {
-        handleFirestoreError(err, OperationType.GET, "stats/global");
-      });
-
-      // Fetch recent generations
-      const fetchRecent = async () => {
-        try {
-          const q = query(collection(db, "generations"), orderBy("timestamp", "desc"), limit(10));
-          const snap = await getDocs(q);
-          setRecentGenerations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (err) {
-          handleFirestoreError(err, OperationType.LIST, "generations");
-        }
-      };
-      
-      const fetchUsers = async () => {
-        try {
-          const q = query(collection(db, "users"), orderBy("createdAt", "desc"), limit(20));
-          const snap = await getDocs(q);
-          setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (err) {
-          handleFirestoreError(err, OperationType.LIST, "users");
-        }
-      };
-
-      fetchRecent();
-      fetchUsers();
-    }
-
     const checkApiKey = async () => {
       if (window.aistudio) {
         const selected = await window.aistudio.hasSelectedApiKey();
@@ -228,10 +197,45 @@ function MainApp() {
     };
     checkApiKey();
 
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeStats) unsubscribeStats();
+    return () => unsubscribeAuth();
+  }, []);
+
+  // Admin Data Fetching
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    // Admin Stats Listener
+    const unsubscribeStats = onSnapshot(doc(db, "stats", "global"), (doc) => {
+      setGlobalStats(doc.data());
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, "stats/global");
+    });
+
+    // Fetch recent generations
+    const fetchRecent = async () => {
+      try {
+        const q = query(collection(db, "generations"), orderBy("timestamp", "desc"), limit(10));
+        const snap = await getDocs(q);
+        setRecentGenerations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, "generations");
+      }
     };
+    
+    const fetchUsers = async () => {
+      try {
+        const q = query(collection(db, "users"), orderBy("createdAt", "desc"), limit(20));
+        const snap = await getDocs(q);
+        setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, "users");
+      }
+    };
+
+    fetchRecent();
+    fetchUsers();
+
+    return () => unsubscribeStats();
   }, [isAdmin]);
 
   const handleLogin = async () => {
@@ -497,9 +501,7 @@ function MainApp() {
       <header className="border-b border-neutral-800 bg-neutral-950/90 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-[#9D88FF] rounded-xl flex items-center justify-center text-white shadow-lg shadow-[#9D88FF]/20">
-              <BroyaLogo size={24} />
-            </div>
+            <BroyaLogo size={40} />
             <h1 className="text-xl font-bold tracking-tight">Broya</h1>
           </div>
           
@@ -540,15 +542,15 @@ function MainApp() {
         </div>
       </header>
 
-      {showLanding ? (
-        <LandingPage onStart={() => setShowLanding(false)} />
-      ) : showAdminPanel && isAdmin ? (
+      {showAdminPanel && isAdmin ? (
         <AdminDashboard 
           stats={globalStats} 
           generations={recentGenerations} 
           users={allUsers}
           onClose={() => setShowAdminPanel(false)} 
         />
+      ) : showLanding ? (
+        <LandingPage onStart={() => setShowLanding(false)} />
       ) : (
         <>
           <main className="max-w-6xl mx-auto px-6 py-8">
