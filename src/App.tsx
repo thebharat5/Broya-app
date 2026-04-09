@@ -77,6 +77,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
 function BroyaLogo({ size = 24 }: { size?: number }) {
   const [error, setError] = useState(false);
+  const [timestamp] = useState(Date.now());
 
   if (error) {
     return (
@@ -91,14 +92,15 @@ function BroyaLogo({ size = 24 }: { size?: number }) {
 
   return (
     <img 
-      src="/logo.jpg" 
+      src={`/logobroya.jpg?v=${timestamp}`} 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-xl shadow-sm"
-      onLoad={() => console.log("Logo loaded successfully from /logo.jpg")}
+      onLoad={() => console.log("Logo loaded successfully from /logobroya.jpg")}
       onError={(e) => {
-        console.error("Logo failed to load from /logo.jpg", e);
+        // Log only the message to avoid circular structure issues in some environments
+        console.error("Logo failed to load from /logobroya.jpg", e.toString());
         setError(true);
       }}
     />
