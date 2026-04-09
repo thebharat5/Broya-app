@@ -91,13 +91,13 @@ function BroyaLogo({ size = 24 }: { size?: number }) {
 
   return (
     <img 
-      src="/logo.jpg?v=11" 
+      src="/broya-brand-v2.jpg" 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-xl shadow-sm"
-      onError={() => {
-        console.error("Logo failed to load at /logo.jpg");
+      onError={(e) => {
+        console.error("Logo failed to load at /broya-brand-v2.jpg", e);
         setError(true);
       }}
     />
@@ -1109,14 +1109,16 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
 
   const handleGiveCredits = async (userId: string, type: 'standard' | 'pro', amount: number) => {
     try {
+      console.log(`Admin attempting to give ${amount} ${type} credits to ${userId}`);
       const userRef = doc(db, "users", userId);
       await updateDoc(userRef, {
         [type === 'standard' ? 'standardCredits' : 'proCredits']: increment(amount)
       });
       console.log(`Successfully gave ${amount} ${type} credits to ${userId}`);
-      alert(`Success! Added ${amount} ${type} credits.`);
-    } catch (err) {
+      alert(`Success! Updated ${type} credits by ${amount}.`);
+    } catch (err: any) {
       console.error("Failed to update credits:", err);
+      alert(`Error: ${err.message || "Failed to update credits. Check console for details."}`);
       handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
     }
   };
