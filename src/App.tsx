@@ -10,7 +10,6 @@ import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
-import logoAsset from "./assets/logo.jpg";
 
 declare global {
   interface Window {
@@ -92,14 +91,14 @@ function BroyaLogo({ size = 24 }: { size?: number }) {
 
   return (
     <img 
-      src={logoAsset} 
+      src="/logo.jpg" 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-xl shadow-sm"
-      onLoad={() => console.log("Logo loaded successfully from assets")}
+      onLoad={() => console.log("Logo loaded successfully from /logo.jpg")}
       onError={(e) => {
-        console.error("Logo failed to load from assets", e);
+        console.error("Logo failed to load from /logo.jpg", e);
         setError(true);
       }}
     />
