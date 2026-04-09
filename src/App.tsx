@@ -6,7 +6,7 @@
 import React, { useState, useRef, ChangeEvent, useEffect, ErrorInfo, ReactNode } from "react";
 import { GoogleGenAI } from "@google/genai";
 import { motion, AnimatePresence } from "motion/react";
-import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key, PlayCircle, X, LogIn, LogOut, Shield, Users, BarChart3, TrendingUp } from "lucide-react";
+import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key, PlayCircle, X, LogIn, LogOut, Shield, Users, BarChart3, TrendingUp, Search, Plus, Minus } from "lucide-react";
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { Analytics } from "@vercel/analytics/react";
@@ -1094,6 +1094,28 @@ function MainApp() {
 
 function AdminDashboard({ stats, generations, users, onClose }: { stats: any, generations: any[], users: any[], onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<'stats' | 'users'>('stats');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredUsers = users.filter(u => 
+    (u.displayName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (u.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    u.id.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleGiveCredits = async (userId: string, type: 'standard' | 'pro', amount: number) => {
+    try {
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, {
+        [type === 'standard' ? 'standardCredits' : 'proCredits']: increment(amount)
+      });
+      // The list will update automatically if there's a listener, 
+      // but since fetchUsers is called in a useEffect in App, 
+      // we might need to wait for the next fetch or use onSnapshot for users too.
+      // For now, alert is fine.
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+    }
+  };
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
@@ -1200,11 +1222,21 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
         </>
       ) : (
         <div className="bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden">
-          <div className="p-6 border-b border-neutral-800">
+          <div className="p-6 border-b border-neutral-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h3 className="font-bold text-white flex items-center gap-2">
               <Users size={20} className="text-[#9D88FF]" />
-              Registered Users
+              Registered Users ({filteredUsers.length})
             </h3>
+            <div className="relative w-full md:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+              <input 
+                type="text"
+                placeholder="Search name, email or ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-sm focus:outline-none focus:border-[#9D88FF] transition-colors"
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -1213,12 +1245,13 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
                   <th className="px-6 py-4">Name</th>
                   <th className="px-6 py-4">Email</th>
                   <th className="px-6 py-4">Credits (Std/Pro)</th>
+                  <th className="px-6 py-4">Manage Credits</th>
                   <th className="px-6 py-4">Role</th>
                   <th className="px-6 py-4">Joined</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800">
-                {users.map((u) => (
+                {filteredUsers.map((u) => (
                   <tr key={u.id} className="text-sm text-neutral-300 hover:bg-neutral-800/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-white">{u.displayName || 'Guest'}</td>
                     <td className="px-6 py-4 text-neutral-400">{u.email}</td>
@@ -1227,6 +1260,49 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
                         <span className="text-white font-bold">{u.standardCredits}</span>
                         <span className="text-neutral-600">/</span>
                         <span className="text-[#9D88FF] font-bold">{u.proCredits}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-neutral-500 uppercase font-bold">Standard</span>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => handleGiveCredits(u.id, 'standard', 5)}
+                              className="p-1 bg-neutral-800 rounded hover:bg-neutral-700 text-emerald-500 transition-colors"
+                              title="Add 5 Standard Credits"
+                            >
+                              <Plus size={14} />
+                            </button>
+                            <button 
+                              onClick={() => handleGiveCredits(u.id, 'standard', -5)}
+                              className="p-1 bg-neutral-800 rounded hover:bg-neutral-700 text-red-500 transition-colors"
+                              title="Remove 5 Standard Credits"
+                            >
+                              <Minus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="w-px h-8 bg-neutral-800" />
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-neutral-500 uppercase font-bold">Pro</span>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => handleGiveCredits(u.id, 'pro', 10)}
+                              className="p-1 bg-neutral-800 rounded hover:bg-neutral-700 text-emerald-500 transition-colors"
+                              title="Add 10 Pro Credits"
+                            >
+                              <Plus size={14} />
+                            </button>
+                            <button 
+                              onClick={() => handleGiveCredits(u.id, 'pro', -10)}
+                              className="p-1 bg-neutral-800 rounded hover:bg-neutral-700 text-red-500 transition-colors"
+                              title="Remove 10 Pro Credits"
+                            >
+                              <Minus size={14} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
