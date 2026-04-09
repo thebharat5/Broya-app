@@ -10,6 +10,7 @@ import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
 
 declare global {
@@ -94,6 +95,7 @@ export default function App() {
     <ErrorBoundary>
       <MainApp />
       <Analytics />
+      <SpeedInsights />
     </ErrorBoundary>
   );
 }
