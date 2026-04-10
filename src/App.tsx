@@ -295,6 +295,15 @@ function MainApp() {
     }
   };
 
+  const handleSelectKey = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setHasApiKey(true);
+      setIsKeyMissing(false);
+      setError(null);
+    }
+  };
+
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -402,12 +411,14 @@ function MainApp() {
     setError(null);
 
     try {
-      const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
       
       if (!apiKey || apiKey === "") {
-        throw new Error("No API key found. Please add a GEMINI_API_KEY to your Secrets panel or select a key using Pro Mode.");
+        console.error("API Key is missing from environment");
+        throw new Error("API Connection Error: The shared 'Free Tier' key is missing. Please connect your own key to continue.");
       }
 
+      console.log("Attempting generation with key present");
       const ai = new GoogleGenAI({ apiKey: apiKey });
       
       const sourceBase64 = sourceImage.split(",")[1];
@@ -510,24 +521,7 @@ function MainApp() {
         setError("API Key error. Please re-select your API key.");
       } else if (errorMessage.includes("quota") || errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
         setRetryTimer(60);
-        setError(
-          <div className="space-y-3">
-            <p className="font-bold text-red-400">Shared AI limit reached!</p>
-            <p className="text-xs">Google limits how many images can be generated per minute across all users. Please wait for the timer below.</p>
-            
-            <div className="bg-black/20 rounded-xl p-3 border border-white/5">
-              <p className="text-[10px] text-neutral-400 mb-2 uppercase font-bold tracking-wider">Wait to Retry</p>
-              <button 
-                disabled={retryTimer > 0}
-                onClick={generatePost}
-                className={`w-full py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${retryTimer > 0 ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' : 'bg-[#9D88FF] text-white hover:bg-[#8A75FF]'}`}
-              >
-                <RefreshCw size={14} className={retryTimer > 0 ? '' : 'animate-spin-slow'} />
-                {retryTimer > 0 ? `Retry in ${retryTimer}s` : 'Try Again Now'}
-              </button>
-            </div>
-          </div>
-        );
+        setError("Shared AI limit reached. Google limits how many images can be generated per minute across all users. Please try again in a minute.");
       } else {
         setError(errorMessage || "Failed to generate image. Please try again.");
       }
@@ -555,22 +549,6 @@ function MainApp() {
           </div>
           
           <div className="flex items-center gap-4">
-            {!showLanding && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-lg">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-neutral-500 uppercase">Credits</span>
-                  <span className="text-sm font-bold text-white">{standardCredits}</span>
-                </div>
-                <div className="w-[1px] h-3 bg-neutral-800 mx-1" />
-                <button 
-                  onClick={handleWatchAd}
-                  className="text-[10px] font-bold text-[#9D88FF] hover:text-white transition-colors"
-                >
-                  + Get Free
-                </button>
-              </div>
-            )}
-
             {isAdmin && (
               <button 
                 onClick={() => setShowAdminPanel(!showAdminPanel)}
@@ -676,16 +654,6 @@ function MainApp() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="px-4 py-2 bg-neutral-900 border border-neutral-800 rounded-xl flex flex-col items-center justify-center text-center">
-                  <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold">Standard Credits</span>
-                  <span className="text-lg font-bold text-white">{standardCredits}</span>
-                </div>
-                <div className="px-4 py-2 bg-[#9D88FF]/10 border border-[#9D88FF]/20 rounded-xl flex flex-col items-center justify-center text-center">
-                  <span className="text-[10px] uppercase tracking-wider text-[#9D88FF] font-bold">Pro Credits</span>
-                  <span className="text-lg font-bold text-[#9D88FF]">{proCredits}</span>
-                </div>
-              </div>
 
               {!isProMode ? (
                 <div className="space-y-3">
