@@ -77,7 +77,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
 function BroyaLogo({ size = 24 }: { size?: number }) {
   const [error, setError] = useState(false);
-  const [timestamp] = useState(Date.now());
+  const logoUrl = "https://lh3.googleusercontent.com/d/18sbufkDifaEidqmhXKhaSwFcG6j_nNyv";
 
   if (error) {
     return (
@@ -92,15 +92,15 @@ function BroyaLogo({ size = 24 }: { size?: number }) {
 
   return (
     <img 
-      src={`/logo_v2.jpg?v=${timestamp}`} 
+      src={logoUrl} 
       alt="Broya Logo" 
       width={size}
       height={size}
       className="object-contain rounded-xl shadow-sm"
-      onLoad={() => console.log("Logo loaded successfully from /logo_v2.jpg")}
+      referrerPolicy="no-referrer"
+      onLoad={() => console.log("Logo loaded successfully from Google Drive")}
       onError={(e) => {
-        // Log only the message to avoid circular structure issues in some environments
-        console.error("Logo failed to load from /logo_v2.jpg", e.toString());
+        console.error("Logo failed to load from Google Drive", e.toString());
         setError(true);
       }}
     />
