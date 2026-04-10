@@ -447,7 +447,7 @@ function MainApp() {
         prompt = "Create a professional Instagram post for the product in the first image. Use the second image as a STYLE and COMPOSITION reference. The final image should have the same aesthetic, lighting, and background style as the reference image, but featuring the product from the first image. Realistic textures, professional lighting, high-end product photography style.";
       }
 
-      const modelName = isProMode ? "gemini-3.1-flash-image-preview" : "gemini-2.5-flash-image";
+      const modelName = "gemini-2.5-flash-image";
 
       const response = await ai.models.generateContent({
         model: modelName,
@@ -521,7 +521,16 @@ function MainApp() {
         setError("API Key error. Please re-select your API key.");
       } else if (errorMessage.includes("quota") || errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
         setRetryTimer(60);
-        setError("Shared AI limit reached. Google limits how many images can be generated per minute across all users. Please try again in a minute.");
+        setError(
+          <div className="space-y-2">
+            <p className="font-bold text-red-400">Shared API Limit Reached</p>
+            <p className="text-xs leading-relaxed">
+              Because this is a "Free Tier" app, it uses a shared Google API key. 
+              Other people using this same system have used up the current minute's limit.
+            </p>
+            <p className="text-[10px] text-neutral-500 font-medium">Please wait 60 seconds and try again. This is a limit set by Google, not the app.</p>
+          </div>
+        );
       } else {
         setError(errorMessage || "Failed to generate image. Please try again.");
       }
@@ -1134,12 +1143,12 @@ function AdminDashboard({ stats, generations, users, onClose, currentUser, onRef
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-1">
-          <h2 className="text-3xl font-bold text-white">Admin Dashboard</h2>
-          <p className="text-neutral-400">Business performance and user activity overview.</p>
+          <h2 className="text-2xl md:text-3xl font-bold text-white">Admin Dashboard</h2>
+          <p className="text-sm md:text-base text-neutral-400">Business performance and user activity overview.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between md:justify-end gap-4">
           <div className="flex bg-neutral-900 p-1 rounded-xl border border-neutral-800">
             <button 
               onClick={() => setActiveTab('stats')}
@@ -1243,20 +1252,7 @@ function AdminDashboard({ stats, generations, users, onClose, currentUser, onRef
               Registered Users ({filteredUsers.length})
               <span className="text-[10px] font-normal text-neutral-500 ml-2 italic">(Users appear here after their first login)</span>
             </h3>
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <button 
-                onClick={async () => {
-                  if (currentUser) {
-                    await updateDoc(doc(db, "users", currentUser.uid), { proCredits: increment(100) });
-                    onRefillCredits(100);
-                    alert("Added 100 Pro Credits to your account!");
-                  }
-                }}
-                className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors flex items-center gap-2"
-              >
-                <Sparkles size={16} />
-                Refill My Credits
-              </button>
+            <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
               <div className="relative w-full md:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
                 <input 
@@ -1264,18 +1260,12 @@ function AdminDashboard({ stats, generations, users, onClose, currentUser, onRef
                   placeholder="Search name, email or ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      // Trigger search (already filtered by state, but for UX)
-                      console.log("Searching for:", searchTerm);
-                    }
-                  }}
                   className="w-full pl-10 pr-4 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-sm focus:outline-none focus:border-[#9D88FF] transition-colors"
                 />
               </div>
               <button 
                 onClick={() => console.log("Searching for:", searchTerm)}
-                className="px-4 py-2 bg-[#9D88FF] text-white rounded-xl text-sm font-bold hover:bg-[#8A75FF] transition-colors flex items-center gap-2"
+                className="w-full sm:w-auto px-4 py-2 bg-[#9D88FF] text-white rounded-xl text-sm font-bold hover:bg-[#8A75FF] transition-colors flex items-center justify-center gap-2"
               >
                 <Search size={16} />
                 Search
