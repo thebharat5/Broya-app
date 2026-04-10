@@ -118,7 +118,18 @@ export default function App() {
 function MainApp() {
   const [showLanding, setShowLanding] = useState(true);
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [retryTimer, setRetryTimer] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let interval: any;
+    if (retryTimer > 0) {
+      interval = setInterval(() => {
+        setRetryTimer(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [retryTimer]);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [globalStats, setGlobalStats] = useState<any>(null);
@@ -129,7 +140,7 @@ function MainApp() {
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | ReactNode | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [isProMode, setIsProMode] = useState(false);
   const [aspectRatio, setAspectRatio] = useState("3:4");
@@ -506,7 +517,36 @@ function MainApp() {
         setHasApiKey(false);
         setError("API Key error. Please re-select your API key.");
       } else if (errorMessage.includes("quota") || errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-        setError("The AI is currently busy (Free Tier limit reached). Please wait 60 seconds and try again. TIP: You can refill your credits for free if they are low!");
+        setRetryTimer(60);
+        setError(
+          <div className="space-y-3">
+            <p className="font-bold text-red-400">Shared AI limit reached!</p>
+            <p className="text-xs">Google limits how many images can be generated per minute across all users.</p>
+            
+            <div className="bg-black/20 rounded-xl p-3 border border-white/5">
+              <p className="text-[10px] text-neutral-400 mb-2 uppercase font-bold tracking-wider">Solution 1: Bypass Limit</p>
+              <button 
+                onClick={handleSelectKey}
+                className="w-full py-3 bg-white text-black hover:bg-neutral-200 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Key size={18} />
+                USE YOUR OWN KEY (FREE)
+              </button>
+            </div>
+
+            <div className="bg-black/20 rounded-xl p-3 border border-white/5">
+              <p className="text-[10px] text-neutral-400 mb-2 uppercase font-bold tracking-wider">Solution 2: Wait</p>
+              <button 
+                disabled={retryTimer > 0}
+                onClick={generatePost}
+                className={`w-full py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${retryTimer > 0 ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' : 'bg-[#9D88FF] text-white hover:bg-[#8A75FF]'}`}
+              >
+                <RefreshCw size={14} className={retryTimer > 0 ? '' : 'animate-spin-slow'} />
+                {retryTimer > 0 ? `Retry in ${retryTimer}s` : 'Try Again Now'}
+              </button>
+            </div>
+          </div>
+        );
       } else {
         setError(errorMessage || "Failed to generate image. Please try again.");
       }
@@ -534,6 +574,15 @@ function MainApp() {
           </div>
           
           <div className="flex items-center gap-4">
+            <button 
+              onClick={handleSelectKey}
+              className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${hasApiKey ? 'text-emerald-400 bg-emerald-400/10 border border-emerald-400/20' : 'text-neutral-400 bg-neutral-900 border border-neutral-800 hover:text-white'}`}
+              title={hasApiKey ? "Using personal API Key" : "Use personal API Key to bypass shared limits"}
+            >
+              <Key size={16} />
+              {hasApiKey ? 'Key Active' : 'Use Own Key'}
+            </button>
+
             <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-lg">
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-neutral-500 uppercase">Credits</span>
@@ -590,6 +639,8 @@ function MainApp() {
           generations={recentGenerations} 
           users={allUsers}
           onClose={() => setShowAdminPanel(false)} 
+          currentUser={user}
+          onRefillCredits={(amount) => setProCredits(prev => prev + amount)}
         />
       ) : showLanding ? (
         <LandingPage onStart={() => setShowLanding(false)} />
@@ -1123,7 +1174,7 @@ function MainApp() {
   );
 }
 
-function AdminDashboard({ stats, generations, users, onClose }: { stats: any, generations: any[], users: any[], onClose: () => void }) {
+function AdminDashboard({ stats, generations, users, onClose, currentUser, onRefillCredits }: { stats: any, generations: any[], users: any[], onClose: () => void, currentUser: any, onRefillCredits: (amount: number) => void }) {
   const [activeTab, setActiveTab] = useState<'stats' | 'users'>('stats');
   const [searchTerm, setSearchTerm] = useState('');
   const [giftAmount, setGiftAmount] = useState<number>(10);
@@ -1275,9 +1326,9 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
             <div className="flex items-center gap-2 w-full md:w-auto">
               <button 
                 onClick={async () => {
-                  if (user) {
-                    await updateDoc(doc(db, "users", user.uid), { proCredits: increment(100) });
-                    setProCredits(prev => prev + 100);
+                  if (currentUser) {
+                    await updateDoc(doc(db, "users", currentUser.uid), { proCredits: increment(100) });
+                    onRefillCredits(100);
                     alert("Added 100 Pro Credits to your account!");
                   }
                 }}
