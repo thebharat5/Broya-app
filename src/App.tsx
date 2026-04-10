@@ -134,7 +134,7 @@ function MainApp() {
   const [isProMode, setIsProMode] = useState(false);
   const [aspectRatio, setAspectRatio] = useState("3:4");
   const [resolution, setResolution] = useState("1K");
-  const [standardCredits, setStandardCredits] = useState(3);
+  const [standardCredits, setStandardCredits] = useState(10);
   const [proCredits, setProCredits] = useState(0);
   const [isKeyMissing, setIsKeyMissing] = useState(false);
   const [isWatchingAd, setIsWatchingAd] = useState(false);
@@ -166,14 +166,14 @@ function MainApp() {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               displayName: firebaseUser.displayName,
-              standardCredits: 3,
-              proCredits: 0,
+              standardCredits: 10,
+              proCredits: firebaseUser.email === "thebharat555@gmail.com" ? 9999 : 0,
               role: firebaseUser.email === "thebharat555@gmail.com" ? "admin" : "user",
               createdAt: serverTimestamp(),
             };
             await setDoc(userRef, newUser);
-            setStandardCredits(3);
-            setProCredits(0);
+            setStandardCredits(10);
+            setProCredits(newUser.proCredits);
             setIsAdmin(newUser.role === "admin");
 
             // Increment total users in global stats
@@ -186,11 +186,19 @@ function MainApp() {
             
             // Always check email as fallback and update Firestore if needed
             const isOwnerEmail = firebaseUser.email === "thebharat555@gmail.com";
-            if (isOwnerEmail && data.role !== "admin") {
-              await updateDoc(userRef, { role: "admin" });
-              setIsAdmin(true);
+            if (isOwnerEmail) {
+              if (data.role !== "admin" || data.proCredits < 100) {
+                await updateDoc(userRef, { 
+                  role: "admin",
+                  proCredits: 9999 
+                });
+                setProCredits(9999);
+                setIsAdmin(true);
+              } else {
+                setIsAdmin(true);
+              }
             } else {
-              setIsAdmin(data.role === "admin" || isOwnerEmail);
+              setIsAdmin(data.role === "admin");
             }
           }
         } catch (err) {
@@ -325,13 +333,14 @@ function MainApp() {
   };
 
   const claimCredits = async () => {
-    const newCredits = standardCredits + 2;
+    const refillAmount = 5;
+    const newCredits = standardCredits + refillAmount;
     setStandardCredits(newCredits);
     
     if (user) {
       try {
         const userRef = doc(db, "users", user.uid);
-        await updateDoc(userRef, { standardCredits: increment(2) });
+        await updateDoc(userRef, { standardCredits: increment(refillAmount) });
         
         // Update global stats
         const statsRef = doc(db, "stats", "global");
@@ -344,6 +353,7 @@ function MainApp() {
     }
     
     setIsWatchingAd(false);
+    alert(`Success! ${refillAmount} Standard Credits have been added to your account for free.`);
   };
 
   const handleBuyCredits = async () => {
@@ -380,7 +390,7 @@ function MainApp() {
       }
     } else {
       if (standardCredits <= 0) {
-        setError("You've run out of free credits. Watch an ad to get 2 more!");
+        setError("You've run out of free credits. Click '+ Get Free' in the header to refill!");
         return;
       }
     }
@@ -496,7 +506,7 @@ function MainApp() {
         setHasApiKey(false);
         setError("API Key error. Please re-select your API key.");
       } else if (errorMessage.includes("quota") || errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-        setError("The AI is currently busy (Free Tier limit reached). Please wait 60 seconds and try again, or upgrade to Pro Mode.");
+        setError("The AI is currently busy (Free Tier limit reached). Please wait 60 seconds and try again. TIP: You can refill your credits for free if they are low!");
       } else {
         setError(errorMessage || "Failed to generate image. Please try again.");
       }
@@ -524,6 +534,20 @@ function MainApp() {
           </div>
           
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-lg">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-neutral-500 uppercase">Credits</span>
+                <span className="text-sm font-bold text-white">{standardCredits}</span>
+              </div>
+              <div className="w-[1px] h-3 bg-neutral-800 mx-1" />
+              <button 
+                onClick={handleWatchAd}
+                className="text-[10px] font-bold text-[#9D88FF] hover:text-white transition-colors"
+              >
+                + Get Free
+              </button>
+            </div>
+
             {isAdmin && (
               <button 
                 onClick={() => setShowAdminPanel(!showAdminPanel)}
@@ -1246,8 +1270,22 @@ function AdminDashboard({ stats, generations, users, onClose }: { stats: any, ge
             <h3 className="font-bold text-white flex items-center gap-2">
               <Users size={20} className="text-[#9D88FF]" />
               Registered Users ({filteredUsers.length})
+              <span className="text-[10px] font-normal text-neutral-500 ml-2 italic">(Users appear here after their first login)</span>
             </h3>
             <div className="flex items-center gap-2 w-full md:w-auto">
+              <button 
+                onClick={async () => {
+                  if (user) {
+                    await updateDoc(doc(db, "users", user.uid), { proCredits: increment(100) });
+                    setProCredits(prev => prev + 100);
+                    alert("Added 100 Pro Credits to your account!");
+                  }
+                }}
+                className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors flex items-center gap-2"
+              >
+                <Sparkles size={16} />
+                Refill My Credits
+              </button>
               <div className="relative w-full md:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
                 <input 
