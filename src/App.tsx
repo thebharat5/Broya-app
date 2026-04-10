@@ -145,7 +145,7 @@ function MainApp() {
   const [isProMode, setIsProMode] = useState(false);
   const [aspectRatio, setAspectRatio] = useState("3:4");
   const [resolution, setResolution] = useState("1K");
-  const [standardCredits, setStandardCredits] = useState(10);
+  const [standardCredits, setStandardCredits] = useState(3);
   const [proCredits, setProCredits] = useState(0);
   const [isKeyMissing, setIsKeyMissing] = useState(false);
   const [isWatchingAd, setIsWatchingAd] = useState(false);
@@ -177,13 +177,13 @@ function MainApp() {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               displayName: firebaseUser.displayName,
-              standardCredits: 10,
+              standardCredits: 3,
               proCredits: firebaseUser.email === "thebharat555@gmail.com" ? 9999 : 0,
               role: firebaseUser.email === "thebharat555@gmail.com" ? "admin" : "user",
               createdAt: serverTimestamp(),
             };
             await setDoc(userRef, newUser);
-            setStandardCredits(10);
+            setStandardCredits(3);
             setProCredits(newUser.proCredits);
             setIsAdmin(newUser.role === "admin");
 
@@ -295,14 +295,6 @@ function MainApp() {
     }
   };
 
-  const handleSelectKey = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      setHasApiKey(true);
-      setIsKeyMissing(false);
-    }
-  };
-
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -344,7 +336,7 @@ function MainApp() {
   };
 
   const claimCredits = async () => {
-    const refillAmount = 5;
+    const refillAmount = 2;
     const newCredits = standardCredits + refillAmount;
     setStandardCredits(newCredits);
     
@@ -521,21 +513,10 @@ function MainApp() {
         setError(
           <div className="space-y-3">
             <p className="font-bold text-red-400">Shared AI limit reached!</p>
-            <p className="text-xs">Google limits how many images can be generated per minute across all users.</p>
+            <p className="text-xs">Google limits how many images can be generated per minute across all users. Please wait for the timer below.</p>
             
             <div className="bg-black/20 rounded-xl p-3 border border-white/5">
-              <p className="text-[10px] text-neutral-400 mb-2 uppercase font-bold tracking-wider">Solution 1: Bypass Limit</p>
-              <button 
-                onClick={handleSelectKey}
-                className="w-full py-3 bg-white text-black hover:bg-neutral-200 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Key size={18} />
-                USE YOUR OWN KEY (FREE)
-              </button>
-            </div>
-
-            <div className="bg-black/20 rounded-xl p-3 border border-white/5">
-              <p className="text-[10px] text-neutral-400 mb-2 uppercase font-bold tracking-wider">Solution 2: Wait</p>
+              <p className="text-[10px] text-neutral-400 mb-2 uppercase font-bold tracking-wider">Wait to Retry</p>
               <button 
                 disabled={retryTimer > 0}
                 onClick={generatePost}
@@ -574,28 +555,21 @@ function MainApp() {
           </div>
           
           <div className="flex items-center gap-4">
-            <button 
-              onClick={handleSelectKey}
-              className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${hasApiKey ? 'text-emerald-400 bg-emerald-400/10 border border-emerald-400/20' : 'text-neutral-400 bg-neutral-900 border border-neutral-800 hover:text-white'}`}
-              title={hasApiKey ? "Using personal API Key" : "Use personal API Key to bypass shared limits"}
-            >
-              <Key size={16} />
-              {hasApiKey ? 'Key Active' : 'Use Own Key'}
-            </button>
-
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-lg">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-neutral-500 uppercase">Credits</span>
-                <span className="text-sm font-bold text-white">{standardCredits}</span>
+            {!showLanding && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-lg">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-neutral-500 uppercase">Credits</span>
+                  <span className="text-sm font-bold text-white">{standardCredits}</span>
+                </div>
+                <div className="w-[1px] h-3 bg-neutral-800 mx-1" />
+                <button 
+                  onClick={handleWatchAd}
+                  className="text-[10px] font-bold text-[#9D88FF] hover:text-white transition-colors"
+                >
+                  + Get Free
+                </button>
               </div>
-              <div className="w-[1px] h-3 bg-neutral-800 mx-1" />
-              <button 
-                onClick={handleWatchAd}
-                className="text-[10px] font-bold text-[#9D88FF] hover:text-white transition-colors"
-              >
-                + Get Free
-              </button>
-            </div>
+            )}
 
             {isAdmin && (
               <button 
@@ -742,28 +716,6 @@ function MainApp() {
                 )
               )}
 
-              {isProMode && !hasApiKey && hasApiKey !== null && (
-                <div className="p-6 bg-amber-500/5 border border-amber-500/20 rounded-3xl space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
-                      <Key size={20} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="font-bold text-amber-200">API Key Required</p>
-                      <p className="text-sm text-amber-400/80 leading-relaxed">
-                        To use the high-quality image generation model, you need to select a paid API key. 
-                        <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="ml-1 underline font-medium text-amber-400">Learn about billing</a>
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleSelectKey}
-                    className="w-full py-3 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 transition-colors shadow-lg shadow-amber-500/10"
-                  >
-                    Select API Key
-                  </button>
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-4">
                 {/* Source Image Upload */}
