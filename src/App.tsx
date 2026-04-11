@@ -333,9 +333,22 @@ function MainApp() {
       if (!response.ok) {
         const errorData = await response.json();
         let errorMessage = errorData.error || "Failed to generate image.";
+        const isCustom = errorData.isCustom;
         
-        if (errorMessage.includes("429") || errorMessage.toLowerCase().includes("quota")) {
-          errorMessage = "Quota Exceeded: Your Google Cloud project has hit its free tier limit. Please check your usage in the Google Cloud Console or try again later.";
+        if (errorMessage.includes("429") || errorMessage.toLowerCase().includes("quota") || errorData.status === 429) {
+          setRetryTimer(60);
+          setError(
+            <div className="space-y-2">
+              <p className="font-bold text-red-400">API Limit Reached</p>
+              <p className="text-xs leading-relaxed">
+                {isCustom 
+                  ? "Your CUSTOM API key (VITE_BROYA_KEY) has hit its quota limit. Please check your Google Cloud Console billing or quota settings."
+                  : "The shared API key has hit its limit. Please ensure your VITE_BROYA_KEY is correctly set in the Secrets menu to avoid this."}
+              </p>
+              <p className="text-[10px] text-neutral-500 font-medium">Please wait 60 seconds and try again.</p>
+            </div>
+          );
+          return;
         }
         
         throw new Error(errorMessage);
@@ -366,24 +379,8 @@ function MainApp() {
       }
     } catch (err: any) {
       console.error("Generation error:", err);
-      const errorMessage = err.message || "";
-      
-      if (errorMessage.includes("Requested entity was not found")) {
-        setError("API Key error. Please check your VITE_BROYA_KEY secret.");
-      } else if (errorMessage.includes("quota") || errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-        setRetryTimer(60);
-        setError(
-          <div className="space-y-2">
-            <p className="font-bold text-red-400">API Limit Reached</p>
-            <p className="text-xs leading-relaxed">
-              The API key currently in use has hit its generation limit. If you are using VITE_BROYA_KEY, check your Google Cloud Console quota. If it is falling back to the shared key, the VITE_BROYA_KEY is missing.
-            </p>
-            <p className="text-[10px] text-neutral-500 font-medium">Please wait 60 seconds and try again.</p>
-          </div>
-        );
-      } else {
-        setError(errorMessage || "Failed to generate image. Please try again.");
-      }
+      const errorMessage = err.message || "Failed to generate image. Please try again.";
+      setError(errorMessage);
     } finally {
       setIsGenerating(false);
     }

@@ -27,21 +27,24 @@ async function startServer() {
     try {
       const { prompt, parts, aspectRatio } = req.body;
       
-      // Read key from server environment (Secrets menu)
-      const apiKey = process.env.VITE_BROYA_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY;
+      const customKey = process.env.VITE_BROYA_KEY;
+      const sharedKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+      const apiKey = customKey || sharedKey;
+      
+      const isCustom = !!customKey && customKey !== "";
       
       if (!apiKey) {
-        console.error("API Key missing in environment variables");
-        return res.status(500).json({ error: "API Key not configured on server. Please add VITE_BROYA_KEY to the Secrets menu." });
+        console.error("No API key found in environment");
+        return res.status(500).json({ 
+          error: "API Key not configured. Please add VITE_BROYA_KEY to the Secrets menu.",
+          isCustom: false
+        });
       }
 
-      console.log("Using API Key starting with:", apiKey.substring(0, 8) + "...");
+      console.log(`Using ${isCustom ? 'CUSTOM' : 'SHARED'} API Key starting with: ${apiKey.substring(0, 6)}...`);
       const ai = new GoogleGenAI({ apiKey });
 
-      // Using gemini-3.1-flash-image-preview which is the latest high-quality model
       const modelName = "gemini-3.1-flash-image-preview";
-      console.log(`Calling model: ${modelName}`);
-
       const response = await ai.models.generateContent({
         model: modelName,
         contents: {
@@ -61,14 +64,23 @@ async function startServer() {
           image: {
             mimeType: part.inlineData.mimeType,
             data: part.inlineData.data
-          }
+          },
+          isCustom
         });
       } else {
-        res.status(400).json({ error: "No image generated. The AI might have blocked the content or failed to process the request." });
+        res.status(400).json({ 
+          error: "No image generated. The AI might have blocked the content.",
+          isCustom
+        });
       }
     } catch (error: any) {
+      const isCustom = !!process.env.VITE_BROYA_KEY;
       console.error("Server Generation Error:", error);
-      res.status(500).json({ error: error.message || "Internal Server Error" });
+      res.status(error.status || 500).json({ 
+        error: error.message || "Internal Server Error",
+        isCustom,
+        status: error.status
+      });
     }
   });
 
