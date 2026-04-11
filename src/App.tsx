@@ -141,25 +141,10 @@ function MainApp() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | ReactNode | null>(null);
-  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
-  const [isProMode, setIsProMode] = useState(false);
   const [aspectRatio, setAspectRatio] = useState("3:4");
   const [resolution, setResolution] = useState("1K");
-  const [standardCredits, setStandardCredits] = useState(3);
-  const [proCredits, setProCredits] = useState(0);
-  const [isKeyMissing, setIsKeyMissing] = useState(false);
-  const [isWatchingAd, setIsWatchingAd] = useState(false);
-  const [adTimer, setAdTimer] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const referenceFileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    // Check if both keys are missing
-    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === "") {
-      setIsKeyMissing(true);
-    }
-  }, []);
 
   useEffect(() => {
     // Auth Listener
@@ -177,14 +162,10 @@ function MainApp() {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               displayName: firebaseUser.displayName,
-              standardCredits: 3,
-              proCredits: firebaseUser.email === "thebharat555@gmail.com" ? 9999 : 0,
               role: firebaseUser.email === "thebharat555@gmail.com" ? "admin" : "user",
               createdAt: serverTimestamp(),
             };
             await setDoc(userRef, newUser);
-            setStandardCredits(3);
-            setProCredits(newUser.proCredits);
             setIsAdmin(newUser.role === "admin");
 
             // Increment total users in global stats
@@ -192,18 +173,14 @@ function MainApp() {
             await setDoc(statsRef, { totalUsers: increment(1) }, { merge: true });
           } else {
             const data = userDoc.data();
-            setStandardCredits(data.standardCredits || 0);
-            setProCredits(data.proCredits || 0);
             
             // Always check email as fallback and update Firestore if needed
             const isOwnerEmail = firebaseUser.email === "thebharat555@gmail.com";
             if (isOwnerEmail) {
-              if (data.role !== "admin" || data.proCredits < 100) {
+              if (data.role !== "admin") {
                 await updateDoc(userRef, { 
-                  role: "admin",
-                  proCredits: 9999 
+                  role: "admin"
                 });
-                setProCredits(9999);
                 setIsAdmin(true);
               } else {
                 setIsAdmin(true);
@@ -216,24 +193,9 @@ function MainApp() {
           handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
         }
       } else {
-        // Fallback to localStorage for guests
-        const savedStd = localStorage.getItem("insta_std_credits");
-        const savedPro = localStorage.getItem("insta_pro_credits");
-        if (savedStd) setStandardCredits(parseInt(savedStd, 10));
-        if (savedPro) setProCredits(parseInt(savedPro, 10));
         setIsAdmin(false);
       }
     });
-
-    const checkApiKey = async () => {
-      if (window.aistudio) {
-        const selected = await window.aistudio.hasSelectedApiKey();
-        setHasApiKey(selected);
-      } else {
-        setHasApiKey(true);
-      }
-    };
-    checkApiKey();
 
     return () => unsubscribeAuth();
   }, []);
@@ -295,15 +257,6 @@ function MainApp() {
     }
   };
 
-  const handleSelectKey = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      setHasApiKey(true);
-      setIsKeyMissing(false);
-      setError(null);
-    }
-  };
-
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -330,81 +283,10 @@ function MainApp() {
     }
   };
 
-  const handleWatchAd = async () => {
-    setIsWatchingAd(true);
-    setAdTimer(5);
-    const interval = setInterval(() => {
-      setAdTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const claimCredits = async () => {
-    const refillAmount = 2;
-    const newCredits = standardCredits + refillAmount;
-    setStandardCredits(newCredits);
-    
-    if (user) {
-      try {
-        const userRef = doc(db, "users", user.uid);
-        await updateDoc(userRef, { standardCredits: increment(refillAmount) });
-        
-        // Update global stats
-        const statsRef = doc(db, "stats", "global");
-        await setDoc(statsRef, { totalAdsWatched: increment(1) }, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
-      }
-    } else {
-      localStorage.setItem("insta_std_credits", newCredits.toString());
-    }
-    
-    setIsWatchingAd(false);
-    alert(`Success! ${refillAmount} Standard Credits have been added to your account for free.`);
-  };
-
-  const handleBuyCredits = async () => {
-    // Simulate a successful purchase
-    const newProCredits = proCredits + 50;
-    setProCredits(newProCredits);
-    
-    if (user) {
-      try {
-        const userRef = doc(db, "users", user.uid);
-        await updateDoc(userRef, { proCredits: increment(50) });
-        
-        // Update global stats
-        const statsRef = doc(db, "stats", "global");
-        await setDoc(statsRef, { totalRevenue: increment(5) }, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
-      }
-    } else {
-      localStorage.setItem("insta_pro_credits", newProCredits.toString());
-    }
-    
-    alert("Success! 50 Pro Credits have been added to your account.");
-  };
-
   const generatePost = async () => {
-    if (!sourceImage) return;
-
-    // Check limits
-    if (isProMode) {
-      if (proCredits <= 0 && !hasApiKey) {
-        setError("You need Pro Credits or your own API Key to use Pro Mode. Buy credits below!");
-        return;
-      }
-    } else {
-      if (standardCredits <= 0) {
-        setError("You've run out of free credits. Click '+ Get Free' in the header to refill!");
-        return;
-      }
+    if (!sourceImage) {
+      setError("Please upload a product photo first.");
+      return;
     }
 
     setIsGenerating(true);
@@ -415,10 +297,9 @@ function MainApp() {
       
       if (!apiKey || apiKey === "") {
         console.error("API Key is missing from environment");
-        throw new Error("API Connection Error: The shared 'Free Tier' key is missing. Please connect your own key to continue.");
+        throw new Error("API Connection Error: The shared 'Free Tier' key is missing.");
       }
 
-      console.log("Attempting generation with key present");
       const ai = new GoogleGenAI({ apiKey: apiKey });
       
       const sourceBase64 = sourceImage.split(",")[1];
@@ -457,7 +338,6 @@ function MainApp() {
         config: {
           imageConfig: {
             aspectRatio: aspectRatio as any,
-            imageSize: isProMode ? (resolution as any) : undefined,
           },
         },
       });
@@ -468,34 +348,13 @@ function MainApp() {
           setGeneratedImage(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
           foundImage = true;
           
-          // Consume credits
-          if (isProMode) {
-            if (proCredits > 0) {
-              const newPro = proCredits - 1;
-              setProCredits(newPro);
-              if (user) {
-                await updateDoc(doc(db, "users", user.uid), { proCredits: increment(-1) });
-              } else {
-                localStorage.setItem("insta_pro_credits", newPro.toString());
-              }
-            }
-          } else {
-            const newStd = standardCredits - 1;
-            setStandardCredits(newStd);
-            if (user) {
-              await updateDoc(doc(db, "users", user.uid), { standardCredits: increment(-1) });
-            } else {
-              localStorage.setItem("insta_std_credits", newStd.toString());
-            }
-          }
-
           // Log generation
           if (user) {
             await addDoc(collection(db, "generations"), {
               userId: user.uid,
               model: modelName,
               timestamp: serverTimestamp(),
-              type: isProMode ? "pro" : "standard"
+              type: "free"
             });
             
             // Update global stats
@@ -517,8 +376,7 @@ function MainApp() {
       const errorMessage = err.message || "";
       
       if (errorMessage.includes("Requested entity was not found")) {
-        setHasApiKey(false);
-        setError("API Key error. Please re-select your API key.");
+        setError("API Key error. Please check your environment variables.");
       } else if (errorMessage.includes("quota") || errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
         setRetryTimer(60);
         setError(
@@ -601,206 +459,162 @@ function MainApp() {
           users={allUsers}
           onClose={() => setShowAdminPanel(false)} 
           currentUser={user}
-          onRefillCredits={(amount) => setProCredits(prev => prev + amount)}
         />
       ) : showLanding ? (
-        <LandingPage onStart={() => setShowLanding(false)} />
+        <LandingPage onStart={() => {
+          setShowLanding(false);
+          window.scrollTo(0, 0);
+        }} />
       ) : (
-        <>
-          <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* Horizontal Ad Placeholder */}
-        <div className="w-full h-52 bg-neutral-900 border border-neutral-800 rounded-2xl mb-8 flex items-center justify-center text-neutral-600 text-sm font-medium overflow-hidden relative">
-          <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-neutral-800 rounded text-[10px] uppercase tracking-wider">Advertisement</div>
-          Horizontal Ad Space (728x200)
-        </div>
+        <main className="max-w-6xl mx-auto px-6 py-8">
+          {/* Horizontal Ad Placeholder */}
+          <div className="w-full h-52 bg-neutral-900 border border-neutral-800 rounded-2xl mb-8 flex items-center justify-center text-neutral-600 text-sm font-medium overflow-hidden relative">
+            <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-neutral-800 rounded text-[10px] uppercase tracking-wider">Advertisement</div>
+            Horizontal Ad Space (728x200)
+          </div>
 
-        <div className="grid lg:grid-cols-[1fr_1fr_160px] gap-8 items-start">
-          
-          {/* Left Column: Upload & Controls */}
-          <section className="space-y-8">
-            <div className="space-y-2">
-              <h2 className="text-3xl font-bold tracking-tight text-white">
-                Transform your product into a masterpiece
-              </h2>
-              <p className="text-neutral-400 leading-relaxed">
-                Upload your product photo and let AI generate a professional, high-converting Instagram post.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              {isKeyMissing && !isProMode && (
-                <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-red-500/10 rounded-lg text-red-500">
-                      <Key size={20} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="font-bold text-red-200 text-sm">Missing API Key</p>
-                      <p className="text-xs text-red-400/80 leading-relaxed">
-                        The app needs a Gemini API key to function. Please add a secret named <code className="bg-red-500/20 px-1 rounded">GEMINI_API_KEY</code> in the Secrets panel, or toggle **Pro Mode** below to select a key.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between p-4 bg-neutral-900 border border-neutral-800 rounded-2xl">
-                <div className="space-y-0.5">
-                  <p className="font-bold text-sm text-white">Pro Mode (3.1 Flash)</p>
-                  <p className="text-xs text-neutral-500">High Resolution & Realistic Textures</p>
-                </div>
-                <button 
-                  onClick={() => setIsProMode(!isProMode)}
-                  className={`
-                    w-12 h-6 rounded-full transition-colors relative
-                    ${isProMode ? 'bg-[#9D88FF]' : 'bg-neutral-800'}
-                  `}
-                >
-                  <div className={`
-                    absolute top-1 w-4 h-4 bg-white rounded-full transition-transform
-                    ${isProMode ? 'left-7' : 'left-1'}
-                  `} />
-                </button>
+          <div className="grid lg:grid-cols-[1fr_1fr_160px] gap-8 items-start">
+            
+            {/* Left Column: Upload & Controls */}
+            <section className="space-y-8">
+              <div className="space-y-2">
+                <h2 className="text-3xl font-bold tracking-tight text-white">
+                  Transform your product into a masterpiece
+                </h2>
+                <p className="text-neutral-400 leading-relaxed">
+                  Upload your product photo and let AI generate a professional, high-converting Instagram post.
+                </p>
               </div>
 
-
-              {!isProMode ? (
-                <div className="space-y-3">
-                  <button
-                    onClick={handleWatchAd}
-                    className="w-full py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-neutral-800 transition-all text-neutral-300 border-dashed"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Main Product Upload */}
+                <div className="space-y-4">
+                  <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">1. Product Photo</p>
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`
+                      aspect-square rounded-3xl border-2 border-dashed transition-all cursor-pointer group relative overflow-hidden
+                      ${sourceImage ? 'border-[#9D88FF]/50 bg-[#9D88FF]/5' : 'border-neutral-800 bg-neutral-900/50 hover:border-[#9D88FF]/30 hover:bg-neutral-900'}
+                    `}
                   >
-                    <PlayCircle size={18} />
-                    Watch Ad for +2 Standard Credits
-                  </button>
-                  <div className="w-full h-20 bg-neutral-900/50 border border-neutral-800 rounded-xl flex items-center justify-center text-neutral-600 text-[10px] font-medium overflow-hidden relative">
-                    <div className="absolute top-1.5 left-1.5 px-1 py-0.5 bg-neutral-800 rounded text-[8px] uppercase tracking-wider">Sponsored</div>
-                    Native Ad Space (300x100)
+                    {sourceImage ? (
+                      <>
+                        <img src={sourceImage} alt="Source" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <RefreshCw className="text-white" size={32} />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+                        <div className="w-16 h-16 bg-neutral-800 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Upload className="text-[#9D88FF]" size={28} />
+                        </div>
+                        <div>
+                          <p className="text-white font-bold">Upload Product</p>
+                          <p className="text-xs text-neutral-500 mt-1">PNG, JPG or WEBP</p>
+                        </div>
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleImageUpload} 
+                      accept="image/*" 
+                      className="hidden" 
+                    />
                   </div>
                 </div>
-              ) : (
-                proCredits <= 0 && !hasApiKey && (
-                  <button
-                    onClick={() => {
-                      const pricingEl = document.getElementById('pricing');
-                      pricingEl?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                    className="w-full py-3 bg-[#9D88FF]/10 border border-[#9D88FF]/20 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-[#9D88FF]/20 transition-all text-[#9D88FF]"
+
+                {/* Reference Style Upload */}
+                <div className="space-y-4">
+                  <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">2. Style Reference (Optional)</p>
+                  <div 
+                    onClick={() => referenceFileInputRef.current?.click()}
+                    className={`
+                      aspect-square rounded-3xl border-2 border-dashed transition-all cursor-pointer group relative overflow-hidden
+                      ${referenceImage ? 'border-amber-500/50 bg-amber-500/5' : 'border-neutral-800 bg-neutral-900/50 hover:border-amber-500/30 hover:bg-neutral-900'}
+                    `}
                   >
-                    <Sparkles size={18} />
-                    Buy Pro Credits to Generate
-                  </button>
-                )
-              )}
-
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Source Image Upload */}
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`
-                    relative h-40 rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden
-                    ${sourceImage ? 'border-[#9D88FF] bg-[#9D88FF]/5' : 'border-neutral-800 hover:border-[#9D88FF]/50 hover:bg-neutral-900/50'}
-                  `}
-                >
-                  <input 
-                    type="file" 
-                    ref={fileInputRef}
-                    onChange={handleImageUpload}
-                    accept="image/*"
-                    className="hidden"
-                  />
-                  
-                  {sourceImage ? (
-                    <img 
-                      src={sourceImage} 
-                      alt="Source" 
-                      className="w-full h-full object-contain p-2"
+                    {referenceImage ? (
+                      <>
+                        <img src={referenceImage} alt="Reference" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <RefreshCw className="text-white" size={32} />
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReferenceImage(null);
+                          }}
+                          className="absolute top-3 right-3 p-1.5 bg-black/60 hover:bg-red-500 rounded-lg text-white transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+                        <div className="w-16 h-16 bg-neutral-800 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Plus className="text-amber-500" size={28} />
+                        </div>
+                        <div>
+                          <p className="text-white font-bold">Add Reference</p>
+                          <p className="text-xs text-neutral-500 mt-1">Match a specific vibe</p>
+                        </div>
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      ref={referenceFileInputRef} 
+                      onChange={handleReferenceImageUpload} 
+                      accept="image/*" 
+                      className="hidden" 
                     />
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-neutral-500">
-                      <div className="w-8 h-8 bg-neutral-900 rounded-full flex items-center justify-center border border-neutral-800">
-                        <Upload size={14} />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-[10px] font-medium text-neutral-300">Upload Image</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {sourceImage && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        fileInputRef.current?.click();
-                      }}
-                      className="absolute bottom-2 right-2 bg-neutral-900/90 backdrop-blur shadow-sm border border-neutral-800 px-2 py-1 rounded-full text-[10px] font-medium hover:bg-neutral-800 transition-colors text-white"
-                    >
-                      Change
-                    </button>
-                  )}
+                  </div>
                 </div>
+              </div>
 
-                {/* Reference Image Upload */}
-                <div 
-                  onClick={() => referenceFileInputRef.current?.click()}
-                  className={`
-                    relative h-40 rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden
-                    ${referenceImage ? 'border-[#9D88FF] bg-[#9D88FF]/5' : 'border-neutral-800 hover:border-[#9D88FF]/50 hover:bg-neutral-900/50'}
-                  `}
-                >
-                  <input 
-                    type="file" 
-                    ref={referenceFileInputRef}
-                    onChange={handleReferenceImageUpload}
-                    accept="image/*"
-                    className="hidden"
-                  />
-                  
-                  {referenceImage ? (
-                    <img 
-                      src={referenceImage} 
-                      alt="Reference" 
-                      className="w-full h-full object-contain p-2"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-neutral-500">
-                      <div className="w-8 h-8 bg-neutral-900 rounded-full flex items-center justify-center border border-neutral-800">
-                        <ImageIcon size={14} />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-[10px] font-medium text-neutral-300">Reference Style</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {referenceImage && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        referenceFileInputRef.current?.click();
-                      }}
-                      className="absolute bottom-2 right-2 bg-neutral-900/90 backdrop-blur shadow-sm border border-neutral-800 px-2 py-1 rounded-full text-[10px] font-medium hover:bg-neutral-800 transition-colors text-white"
-                    >
-                      Change
-                    </button>
-                  )}
+              <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-neutral-900 border border-neutral-800 rounded-2xl space-y-2">
+                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Aspect Ratio</p>
+                  <select 
+                    value={aspectRatio}
+                    onChange={(e) => setAspectRatio(e.target.value)}
+                    className="w-full bg-transparent border-none text-white font-semibold focus:ring-0 cursor-pointer outline-none"
+                  >
+                    <option value="1:1" className="bg-neutral-900">1:1 Square</option>
+                    <option value="3:4" className="bg-neutral-900">3:4 Portrait</option>
+                    <option value="4:3" className="bg-neutral-900">4:3 Landscape</option>
+                    <option value="9:16" className="bg-neutral-900">9:16 Story</option>
+                    <option value="16:9" className="bg-neutral-900">16:9 Cinematic</option>
+                  </select>
+                </div>
+                <div className="p-4 bg-neutral-900 border border-neutral-800 rounded-2xl space-y-2">
+                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Resolution</p>
+                  <select 
+                    value={resolution}
+                    onChange={(e) => setResolution(e.target.value)}
+                    className="w-full bg-transparent border-none text-white font-semibold focus:ring-0 outline-none cursor-pointer"
+                  >
+                    <option value="Standard" className="bg-neutral-900">Standard</option>
+                    <option value="1K" className="bg-neutral-900">1K HD</option>
+                  </select>
                 </div>
               </div>
 
               <button
                 onClick={generatePost}
-                disabled={!sourceImage || isGenerating}
+                disabled={isGenerating || !sourceImage}
                 className={`
-                  w-full py-4 rounded-2xl font-semibold flex items-center justify-center gap-2 transition-all shadow-xl
-                  ${!sourceImage || isGenerating 
-                    ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed shadow-none border border-neutral-700' 
-                    : 'bg-[#9D88FF] text-white hover:bg-[#8B74FF] hover:scale-[1.02] active:scale-[0.98] shadow-[#9D88FF]/20'}
+                  w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-3
+                  ${isGenerating || !sourceImage 
+                    ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' 
+                    : 'bg-[#9D88FF] text-white hover:bg-[#8B74FF] shadow-lg shadow-[#9D88FF]/20 active:scale-[0.98]'}
                 `}
               >
                 {isGenerating ? (
                   <>
-                    <Loader2 className="animate-spin" size={20} />
+                    <Loader2 className="animate-spin" size={24} />
                     Generating Magic...
                   </>
                 ) : (
@@ -816,43 +630,6 @@ function MainApp() {
                   {error}
                 </div>
               )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-neutral-900 border border-neutral-800 rounded-2xl space-y-2">
-                <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Aspect Ratio</p>
-                <select 
-                  value={aspectRatio}
-                  onChange={(e) => setAspectRatio(e.target.value)}
-                  className="w-full bg-transparent border-none text-white font-semibold focus:ring-0 cursor-pointer outline-none"
-                >
-                  <option value="1:1" className="bg-neutral-900">1:1 Square</option>
-                  <option value="3:4" className="bg-neutral-900">3:4 Portrait</option>
-                  <option value="4:3" className="bg-neutral-900">4:3 Landscape</option>
-                  <option value="9:16" className="bg-neutral-900">9:16 Story</option>
-                  <option value="16:9" className="bg-neutral-900">16:9 Cinematic</option>
-                  {isProMode && (
-                    <>
-                      <option value="1:4" className="bg-neutral-900">1:4 Tall</option>
-                      <option value="4:1" className="bg-neutral-900">4:1 Wide</option>
-                    </>
-                  )}
-                </select>
-              </div>
-              <div className="p-4 bg-neutral-900 border border-neutral-800 rounded-2xl space-y-2">
-                <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Resolution</p>
-                <select 
-                  value={resolution}
-                  onChange={(e) => setResolution(e.target.value)}
-                  disabled={!isProMode}
-                  className={`w-full bg-transparent border-none text-white font-semibold focus:ring-0 outline-none ${!isProMode ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                >
-                  {!isProMode && <option value="Standard" className="bg-neutral-900">Standard</option>}
-                  <option value="1K" className="bg-neutral-900">1K HD</option>
-                  <option value="2K" className="bg-neutral-900">2K Ultra</option>
-                  <option value="4K" className="bg-neutral-900">4K Studio</option>
-                </select>
-              </div>
             </div>
           </section>
 
@@ -945,150 +722,13 @@ function MainApp() {
           </aside>
         </div>
       </main>
+      )}
 
-      {/* Watch Ad Modal */}
-      <AnimatePresence>
-        {isWatchingAd && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl"
-            >
-              <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
-                <h4 className="font-bold text-white flex items-center gap-2">
-                  <PlayCircle size={20} className="text-[#9D88FF]" />
-                  Watching Advertisement
-                </h4>
-                {adTimer === 0 && (
-                  <button onClick={() => setIsWatchingAd(false)} className="text-neutral-500 hover:text-white">
-                    <X size={20} />
-                  </button>
-                )}
-              </div>
-              
-              <div className="p-12 flex flex-col items-center justify-center space-y-6 text-center">
-                <div className="w-full aspect-video bg-neutral-800 rounded-2xl flex items-center justify-center relative overflow-hidden border border-neutral-700">
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#9D88FF]/10 to-purple-500/10 animate-pulse" />
-                  <PlayCircle size={48} className="text-neutral-700" />
-                  <div className="absolute bottom-4 left-4 right-4 h-1 bg-neutral-700 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: "0%" }}
-                      animate={{ width: "100%" }}
-                      transition={{ duration: 5, ease: "linear" }}
-                      className="h-full bg-[#9D88FF]"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <p className="text-neutral-300 font-medium">
-                    {adTimer > 0 ? `Please wait ${adTimer}s to claim credits...` : "Ad finished! You can now claim your credits."}
-                  </p>
-                  <p className="text-xs text-neutral-500">Watching ads helps keep this service free for everyone.</p>
-                </div>
-
-                <button
-                  disabled={adTimer > 0}
-                  onClick={claimCredits}
-                  className={`
-                    w-full py-4 rounded-2xl font-bold transition-all
-                    ${adTimer > 0 
-                      ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed' 
-                      : 'bg-[#9D88FF] text-white hover:bg-[#8B74FF] shadow-lg shadow-[#9D88FF]/20'}
-                  `}
-                >
-                  {adTimer > 0 ? `Wait ${adTimer}s` : "Claim +2 Credits"}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-        {/* Pricing Section */}
-        <section id="pricing" className="mt-24 space-y-12">
-          <div className="text-center space-y-4">
-            <h2 className="text-4xl font-bold text-white tracking-tight">Simple, Transparent Pricing</h2>
-            <p className="text-neutral-400 max-w-2xl mx-auto">
-              Choose the plan that fits your business needs. Upgrade to Pro for studio-quality results.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 max-w-5xl mx-auto">
-            {/* Free Plan */}
-            <div className="p-4 md:p-8 bg-neutral-900 border border-neutral-800 rounded-[2rem] space-y-4 md:space-y-8 flex flex-col">
-              <div className="space-y-1">
-                <h3 className="text-lg md:text-xl font-bold text-white">Standard</h3>
-                <p className="text-[10px] md:text-sm text-neutral-500">Quick social posts</p>
-              </div>
-              <div className="text-2xl md:text-4xl font-black text-white">$0 <span className="text-[10px] md:text-sm font-normal text-neutral-500">/ forever</span></div>
-              <ul className="space-y-2 md:space-y-4 flex-1">
-                <li className="flex items-center gap-2 md:gap-3 text-[10px] md:text-sm text-neutral-300">
-                  <div className="w-4 h-4 md:w-5 md:h-5 bg-[#9D88FF]/10 rounded-full flex items-center justify-center text-[#9D88FF] text-[8px] md:text-[10px]">✓</div>
-                  Gemini 2.5
-                </li>
-                <li className="flex items-center gap-2 md:gap-3 text-[10px] md:text-sm text-neutral-300">
-                  <div className="w-4 h-4 md:w-5 md:h-5 bg-[#9D88FF]/10 rounded-full flex items-center justify-center text-[#9D88FF] text-[8px] md:text-[10px]">✓</div>
-                  Standard Res
-                </li>
-                <li className="flex items-center gap-2 md:gap-3 text-[10px] md:text-sm text-neutral-300">
-                  <div className="w-4 h-4 md:w-5 md:h-5 bg-[#9D88FF]/10 rounded-full flex items-center justify-center text-[#9D88FF] text-[8px] md:text-[10px]">✓</div>
-                  Ad Supported
-                </li>
-              </ul>
-              <button 
-                onClick={handleWatchAd}
-                className="w-full py-2 md:py-4 bg-neutral-800 text-white rounded-xl md:rounded-2xl font-bold text-xs md:text-base hover:bg-neutral-700 transition-colors"
-              >
-                Watch Ad
-              </button>
-            </div>
-
-            {/* Pro Plan */}
-            <div className="p-4 md:p-8 bg-[#9D88FF] rounded-[2rem] space-y-4 md:space-y-8 flex flex-col relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                <Sparkles size={80} />
-              </div>
-              <div className="space-y-1 relative z-10">
-                <h3 className="text-lg md:text-xl font-bold text-white">Pro Pack</h3>
-                <p className="text-[#F0EEFF]/70 text-[10px] md:text-sm">Studio quality</p>
-              </div>
-              <div className="text-2xl md:text-4xl font-black text-white relative z-10">$5 <span className="text-[10px] md:text-sm font-normal text-[#F0EEFF]/70">/ 50</span></div>
-              <ul className="space-y-2 md:space-y-4 flex-1 relative z-10">
-                <li className="flex items-center gap-2 md:gap-3 text-[10px] md:text-sm text-white">
-                  <div className="w-4 h-4 md:w-5 md:h-5 bg-white/20 rounded-full flex items-center justify-center text-white text-[8px] md:text-[10px]">✓</div>
-                  Gemini 3.1
-                </li>
-                <li className="flex items-center gap-2 md:gap-3 text-[10px] md:text-sm text-white">
-                  <div className="w-4 h-4 md:w-5 md:h-5 bg-white/20 rounded-full flex items-center justify-center text-white text-[8px] md:text-[10px]">✓</div>
-                  4K Studio
-                </li>
-                <li className="flex items-center gap-2 md:gap-3 text-[10px] md:text-sm text-white">
-                  <div className="w-4 h-4 md:w-5 md:h-5 bg-white/20 rounded-full flex items-center justify-center text-white text-[8px] md:text-[10px]">✓</div>
-                  No Ads
-                </li>
-                <li className="flex items-center gap-2 md:gap-3 text-[10px] md:text-sm text-white">
-                  <div className="w-4 h-4 md:w-5 md:h-5 bg-white/20 rounded-full flex items-center justify-center text-white text-[8px] md:text-[10px]">✓</div>
-                  Priority
-                </li>
-              </ul>
-              <button 
-                onClick={handleBuyCredits}
-                className="w-full py-2 md:py-4 bg-white text-[#9D88FF] rounded-xl md:rounded-2xl font-bold text-xs md:text-base hover:bg-[#F0EEFF] transition-colors relative z-10 shadow-xl"
-              >
-                Buy Pro
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Footer */}
+      {/* Footer */}
       <footer className="border-t border-neutral-800 mt-24 py-12 bg-neutral-950">
         <div className="max-w-5xl mx-auto px-6 text-center space-y-4">
           <p className="text-neutral-500 text-sm">
-            Powered by Gemini AI Models
+            Copyright © 2026 Broya. All rights reserved.
           </p>
           <div className="flex justify-center gap-6 text-neutral-800">
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -1097,16 +737,13 @@ function MainApp() {
           </div>
         </div>
       </footer>
-        </>
-      )}
     </div>
   );
 }
 
-function AdminDashboard({ stats, generations, users, onClose, currentUser, onRefillCredits }: { stats: any, generations: any[], users: any[], onClose: () => void, currentUser: any, onRefillCredits: (amount: number) => void }) {
+function AdminDashboard({ stats, generations, users, onClose, currentUser }: { stats: any, generations: any[], users: any[], onClose: () => void, currentUser: any }) {
   const [activeTab, setActiveTab] = useState<'stats' | 'users'>('stats');
   const [searchTerm, setSearchTerm] = useState('');
-  const [giftAmount, setGiftAmount] = useState<number>(10);
 
   const filteredUsers = users.filter(u => 
     (u.displayName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -1114,72 +751,43 @@ function AdminDashboard({ stats, generations, users, onClose, currentUser, onRef
     u.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleGiveCredits = async (userId: string, type: 'standard' | 'pro', amount: number) => {
-    if (!amount || amount === 0) {
-      alert("Please enter a valid amount to gift.");
-      return;
-    }
-
-    try {
-      console.log(`Admin attempting to give ${amount} ${type} credits to ${userId}`);
-      const userRef = doc(db, "users", userId);
-      
-      // Optimistic alert
-      const confirmUpdate = window.confirm(`Are you sure you want to add ${amount} ${type} credits to this user?`);
-      if (!confirmUpdate) return;
-
-      await updateDoc(userRef, {
-        [type === 'standard' ? 'standardCredits' : 'proCredits']: increment(amount)
-      });
-      
-      console.log(`Successfully updated ${type} credits by ${amount} for ${userId}`);
-      alert(`Success! Added ${amount} ${type} credits.`);
-    } catch (err: any) {
-      console.error("Failed to update credits:", err);
-      alert(`Error: ${err.message || "Failed to update credits. Check console for details."}`);
-      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
-    }
-  };
-
   return (
     <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-2xl md:text-3xl font-bold text-white">Admin Dashboard</h2>
-          <p className="text-sm md:text-base text-neutral-400">Business performance and user activity overview.</p>
+          <h2 className="text-xl md:text-3xl font-bold text-white">Admin Dashboard</h2>
+          <p className="text-xs md:text-base text-neutral-400">Business performance and user activity overview.</p>
         </div>
-        <div className="flex items-center justify-between md:justify-end gap-4">
+        <div className="flex items-center justify-between md:justify-end gap-3">
           <div className="flex bg-neutral-900 p-1 rounded-xl border border-neutral-800">
             <button 
               onClick={() => setActiveTab('stats')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'stats' ? 'bg-[#9D88FF] text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+              className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${activeTab === 'stats' ? 'bg-[#9D88FF] text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
             >
               Overview
             </button>
             <button 
               onClick={() => setActiveTab('users')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-[#9D88FF] text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+              className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-[#9D88FF] text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
             >
               Users List
             </button>
           </div>
           <button onClick={onClose} className="p-2 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white">
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
       </div>
 
       {activeTab === 'stats' ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <StatCard icon={<Users className="text-blue-500" />} label="Total Users" value={stats?.totalUsers || 0} trend="+12%" />
             <StatCard icon={<ImageIcon className="text-[#9D88FF]" />} label="Total Images" value={stats?.totalGenerations || 0} trend="+45%" />
-            <StatCard icon={<PlayCircle className="text-amber-500" />} label="Ads Watched" value={stats?.totalAdsWatched || 0} trend="+28%" />
-            <StatCard icon={<TrendingUp className="text-emerald-500" />} label="Total Revenue" value={`$${stats?.totalRevenue || 0}`} trend="+15%" />
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden">
+          <div className="grid lg:grid-cols-1 gap-8">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden">
               <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
                 <h3 className="font-bold text-white flex items-center gap-2">
                   <BarChart3 size={20} className="text-[#9D88FF]" />
@@ -1213,35 +821,6 @@ function AdminDashboard({ stats, generations, users, onClose, currentUser, onRef
                 </table>
               </div>
             </div>
-
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 space-y-6">
-              <h3 className="font-bold text-white">Revenue Breakdown</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-neutral-950 rounded-2xl border border-neutral-800">
-                  <div className="space-y-1">
-                    <p className="text-xs text-neutral-500 font-bold uppercase">Ad Revenue (Est.)</p>
-                    <p className="text-xl font-bold text-white">${((stats?.totalAdsWatched || 0) * 0.01).toFixed(2)}</p>
-                  </div>
-                  <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
-                    <TrendingUp size={20} />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-neutral-950 rounded-2xl border border-neutral-800">
-                  <div className="space-y-1">
-                    <p className="text-xs text-neutral-500 font-bold uppercase">Pro Sales</p>
-                    <p className="text-xl font-bold text-white">${stats?.totalRevenue || 0}</p>
-                  </div>
-                  <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
-                    <TrendingUp size={20} />
-                  </div>
-                </div>
-              </div>
-              <div className="pt-4 border-t border-neutral-800">
-                <p className="text-sm text-neutral-400 leading-relaxed">
-                  Earnings are calculated based on $0.01 per ad view and $5.00 per Pro Credit pack.
-                </p>
-              </div>
-            </div>
           </div>
         </>
       ) : (
@@ -1272,24 +851,12 @@ function AdminDashboard({ stats, generations, users, onClose, currentUser, onRef
               </button>
             </div>
           </div>
-          <div className="px-6 py-3 bg-neutral-800/30 border-b border-neutral-800 flex items-center gap-4">
-            <span className="text-xs font-bold text-neutral-500 uppercase">Gift Amount:</span>
-            <input 
-              type="number" 
-              value={giftAmount}
-              onChange={(e) => setGiftAmount(parseInt(e.target.value) || 0)}
-              className="w-20 px-3 py-1 bg-neutral-950 border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-[#9D88FF]"
-            />
-            <p className="text-[10px] text-neutral-500 italic">Set amount here, then click +Std or +Pro below to gift.</p>
-          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="text-xs font-bold text-neutral-500 uppercase tracking-wider border-b border-neutral-800">
                   <th className="px-6 py-4">Name</th>
                   <th className="px-6 py-4">Email</th>
-                  <th className="px-6 py-4">Credits (Std/Pro)</th>
-                  <th className="px-6 py-4">Manage Credits</th>
                   <th className="px-6 py-4">Role</th>
                   <th className="px-6 py-4">Joined</th>
                 </tr>
@@ -1299,36 +866,6 @@ function AdminDashboard({ stats, generations, users, onClose, currentUser, onRef
                   <tr key={u.id} className="text-sm text-neutral-300 hover:bg-neutral-800/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-white">{u.displayName || 'Guest'}</td>
                     <td className="px-6 py-4 text-neutral-400">{u.email}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-bold">{u.standardCredits}</span>
-                        <span className="text-neutral-600">/</span>
-                        <span className="text-[#9D88FF] font-bold">{u.proCredits}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => handleGiveCredits(u.id, 'standard', giftAmount)}
-                          className="px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded text-[10px] font-bold hover:bg-emerald-500/20 transition-colors border border-emerald-500/20"
-                        >
-                          +{giftAmount} Std
-                        </button>
-                        <button 
-                          onClick={() => handleGiveCredits(u.id, 'pro', giftAmount)}
-                          className="px-2 py-1 bg-[#9D88FF]/10 text-[#9D88FF] rounded text-[10px] font-bold hover:bg-[#9D88FF]/20 transition-colors border border-[#9D88FF]/20"
-                        >
-                          +{giftAmount} Pro
-                        </button>
-                        <button 
-                          onClick={() => handleGiveCredits(u.id, 'standard', -giftAmount)}
-                          className="p-1 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition-colors border border-red-500/20"
-                          title={`Remove ${giftAmount} Standard`}
-                        >
-                          <Minus size={12} />
-                        </button>
-                      </div>
-                    </td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${u.role === 'admin' ? 'bg-amber-500/20 text-amber-500' : 'bg-neutral-800 text-neutral-500'}`}>
                         {u.role}
