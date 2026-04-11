@@ -16,19 +16,26 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
 
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", env: process.env.NODE_ENV });
+  });
+
   // API Route for Generation
   app.post("/api/generate", async (req, res) => {
+    console.log("Received generation request...");
     try {
       const { prompt, parts, aspectRatio } = req.body;
       
       // Read key from server environment (Secrets menu)
-      // We check for VITE_BROYA_KEY first as requested by the user
       const apiKey = process.env.VITE_BROYA_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY;
       
       if (!apiKey) {
+        console.error("API Key missing in environment variables");
         return res.status(500).json({ error: "API Key not configured on server. Please add VITE_BROYA_KEY to the Secrets menu." });
       }
 
+      console.log("Using API Key starting with:", apiKey.substring(0, 8) + "...");
       const ai = new GoogleGenAI({ apiKey });
 
       const response = await ai.models.generateContent({
