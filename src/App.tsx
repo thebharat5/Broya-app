@@ -332,7 +332,13 @@ function MainApp() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to generate image.");
+        let errorMessage = errorData.error || "Failed to generate image.";
+        
+        if (errorMessage.includes("429") || errorMessage.toLowerCase().includes("quota")) {
+          errorMessage = "Quota Exceeded: Your Google Cloud project has hit its free tier limit. Please check your usage in the Google Cloud Console or try again later.";
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

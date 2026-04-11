@@ -38,8 +38,12 @@ async function startServer() {
       console.log("Using API Key starting with:", apiKey.substring(0, 8) + "...");
       const ai = new GoogleGenAI({ apiKey });
 
+      // Using gemini-3.1-flash-image-preview which is the latest high-quality model
+      const modelName = "gemini-3.1-flash-image-preview";
+      console.log(`Calling model: ${modelName}`);
+
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-image",
+        model: modelName,
         contents: {
           parts: [...parts, { text: prompt }],
         },
