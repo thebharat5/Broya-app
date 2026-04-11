@@ -331,7 +331,14 @@ function MainApp() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          // If the server returns HTML (like a 404 page), it means the backend isn't running yet
+          throw new Error("Backend server is not reachable. If you just made changes, please wait a minute for the deployment to finish, or deploy the app again.");
+        }
+        
         let errorMessage = errorData.error || "Failed to generate image.";
         const isCustom = errorData.isCustom;
         
