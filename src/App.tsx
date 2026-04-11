@@ -140,6 +140,7 @@ function MainApp() {
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState("");
   const [error, setError] = useState<string | ReactNode | null>(null);
   const [aspectRatio, setAspectRatio] = useState("3:4");
   const [resolution, setResolution] = useState("1K");
@@ -290,10 +291,11 @@ function MainApp() {
     }
 
     setIsGenerating(true);
+    setGenerationStatus("Analyzing product...");
     setError(null);
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+      const apiKey = process.env.Broya_Key || process.env.GEMINI_API_KEY || process.env.API_KEY;
       
       if (!apiKey || apiKey === "") {
         console.error("API Key is missing from environment");
@@ -314,9 +316,11 @@ function MainApp() {
         },
       ];
 
-      let prompt = "Create a professional Instagram post for this product. Top view (flat lay) of the product packaging on a vibrant, colourful, and appealing background. Realistic textures, shot with a 50mm lens, high-end product photography style, professional lighting. The final image should be a complete scene, not just the product.";
+      setGenerationStatus("Designing background...");
+      let prompt = "Create a professional Instagram post for this product. Top view (flat lay) of the product packaging on a vibrant, colourful, and appealing background. Realistic textures, professional lighting, high-end product photography style. The final image should be a complete scene.";
 
       if (referenceImage) {
+        setGenerationStatus("Matching reference style...");
         const refBase64 = referenceImage.split(",")[1];
         const refMimeType = referenceImage.split(";")[0].split(":")[1];
         parts.push({
@@ -325,9 +329,10 @@ function MainApp() {
             mimeType: refMimeType,
           },
         });
-        prompt = "Create a professional Instagram post for the product in the first image. Use the second image as a STYLE and COMPOSITION reference. The final image should have the same aesthetic, lighting, and background style as the reference image, but featuring the product from the first image. Realistic textures, professional lighting, high-end product photography style.";
+        prompt = "Create a professional Instagram post for the product in the first image. Use the second image as a STYLE reference. Match the aesthetic, lighting, and background style of the reference image exactly, but featuring the product from the first image.";
       }
 
+      setGenerationStatus("Generating high-res image...");
       const modelName = "gemini-2.5-flash-image";
 
       const response = await ai.models.generateContent({
@@ -677,8 +682,8 @@ function MainApp() {
                             <Loader2 className="animate-spin text-[#9D88FF]" size={48} />
                             <Sparkles className="absolute -top-2 -right-2 text-amber-400 animate-pulse" size={20} />
                           </div>
-                          <p className="text-neutral-300 font-medium animate-pulse">Crafting your professional post...</p>
-                          <p className="text-sm text-neutral-500">This usually takes about 10-15 seconds</p>
+                          <p className="text-neutral-300 font-medium animate-pulse">{generationStatus || "Crafting your professional post..."}</p>
+                          <p className="text-sm text-neutral-500">This usually takes about 10-20 seconds</p>
                         </div>
                       ) : (
                         <div className="space-y-4">
