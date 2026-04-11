@@ -295,12 +295,12 @@ function MainApp() {
     setError(null);
 
     try {
-      // Prioritize the user's custom VITE_BROYA_KEY from the Secrets menu
+      // Use the user's custom VITE_BROYA_KEY for all their site visitors
       const apiKey = (import.meta as any).env.VITE_BROYA_KEY || process.env.GEMINI_API_KEY;
       
       if (!apiKey || apiKey === "") {
         console.error("API Key is missing from environment");
-        throw new Error("API Connection Error: The shared 'Free Tier' key is missing.");
+        throw new Error("API Connection Error: Please add VITE_BROYA_KEY in secrets.");
       }
 
       const ai = new GoogleGenAI({ apiKey: apiKey });
@@ -382,7 +382,7 @@ function MainApp() {
       const errorMessage = err.message || "";
       
       if (errorMessage.includes("Requested entity was not found")) {
-        setError("API Key error. Please check your environment variables.");
+        setError("API Key error. Please check your VITE_BROYA_KEY secret.");
       } else if (errorMessage.includes("quota") || errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
         setRetryTimer(60);
         setError(
@@ -603,7 +603,6 @@ function MainApp() {
                     className="w-full bg-transparent border-none text-white font-semibold focus:ring-0 outline-none cursor-pointer"
                   >
                     <option value="Standard" className="bg-neutral-900">Standard</option>
-                    <option value="1K" className="bg-neutral-900">1K HD</option>
                   </select>
                 </div>
               </div>
