@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useRef, ChangeEvent, useEffect, ErrorInfo, ReactNode } from "react";
-import { GoogleGenAI } from "@google/genai";
 import { motion, AnimatePresence } from "motion/react";
 import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key, PlayCircle, X, LogIn, LogOut, Shield, Users, BarChart3, TrendingUp, Search, Plus, Minus } from "lucide-react";
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
@@ -295,23 +294,6 @@ function MainApp() {
     setError(null);
 
     try {
-      // Use the user's custom VITE_BROYA_KEY for all their site visitors
-      const customKey = (import.meta as any).env.VITE_BROYA_KEY;
-      const apiKey = customKey || process.env.GEMINI_API_KEY;
-      
-      if (customKey) {
-        console.log("✅ Using custom API key (VITE_BROYA_KEY)");
-      } else {
-        console.log("ℹ️ Using shared API key (GEMINI_API_KEY)");
-      }
-      
-      if (!apiKey || apiKey === "") {
-        console.error("API Key is missing from environment");
-        throw new Error("API Connection Error: Please add VITE_BROYA_KEY in secrets.");
-      }
-
-      const ai = new GoogleGenAI({ apiKey: apiKey });
-      
       const sourceBase64 = sourceImage.split(",")[1];
       const sourceMimeType = sourceImage.split(";")[0].split(":")[1];
 
@@ -341,47 +323,39 @@ function MainApp() {
       }
 
       setGenerationStatus("Generating high-res image...");
-      const modelName = "gemini-2.5-flash-image";
-
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: {
-          parts: [...parts, { text: prompt }],
-        },
-        config: {
-          imageConfig: {
-            aspectRatio: aspectRatio as any,
-          },
-        },
+      
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, parts, aspectRatio }),
       });
 
-      let foundImage = false;
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          setGeneratedImage(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-          foundImage = true;
-          
-          // Log generation
-          if (user) {
-            await addDoc(collection(db, "generations"), {
-              userId: user.uid,
-              model: modelName,
-              timestamp: serverTimestamp(),
-              type: "free"
-            });
-            
-            // Update global stats
-            await setDoc(doc(db, "stats", "global"), { 
-              totalGenerations: increment(1),
-              totalUsers: increment(0) // Just ensure doc exists
-            }, { merge: true });
-          }
-
-          break;
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate image.");
       }
 
-      if (!foundImage) {
+      const data = await response.json();
+      
+      if (data.image) {
+        setGeneratedImage(`data:${data.image.mimeType};base64,${data.image.data}`);
+        
+        // Log generation
+        if (user) {
+          await addDoc(collection(db, "generations"), {
+            userId: user.uid,
+            model: "gemini-2.5-flash-image",
+            timestamp: serverTimestamp(),
+            type: "free"
+          });
+          
+          // Update global stats
+          await setDoc(doc(db, "stats", "global"), { 
+            totalGenerations: increment(1),
+            totalUsers: increment(0) // Just ensure doc exists
+          }, { merge: true });
+        }
+      } else {
         throw new Error("No image was generated. Please try again.");
       }
     } catch (err: any) {
