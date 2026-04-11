@@ -296,7 +296,14 @@ function MainApp() {
 
     try {
       // Use the user's custom VITE_BROYA_KEY for all their site visitors
-      const apiKey = (import.meta as any).env.VITE_BROYA_KEY || process.env.GEMINI_API_KEY;
+      const customKey = (import.meta as any).env.VITE_BROYA_KEY;
+      const apiKey = customKey || process.env.GEMINI_API_KEY;
+      
+      if (customKey) {
+        console.log("✅ Using custom API key (VITE_BROYA_KEY)");
+      } else {
+        console.log("ℹ️ Using shared API key (GEMINI_API_KEY)");
+      }
       
       if (!apiKey || apiKey === "") {
         console.error("API Key is missing from environment");
@@ -387,12 +394,11 @@ function MainApp() {
         setRetryTimer(60);
         setError(
           <div className="space-y-2">
-            <p className="font-bold text-red-400">Shared API Limit Reached</p>
+            <p className="font-bold text-red-400">API Limit Reached</p>
             <p className="text-xs leading-relaxed">
-              Because this is a "Free Tier" app, it uses a shared Google API key. 
-              Other people using this same system have used up the current minute's limit.
+              The API key currently in use has hit its generation limit. If you are using VITE_BROYA_KEY, check your Google Cloud Console quota. If it is falling back to the shared key, the VITE_BROYA_KEY is missing.
             </p>
-            <p className="text-[10px] text-neutral-500 font-medium">Please wait 60 seconds and try again. This is a limit set by Google, not the app.</p>
+            <p className="text-[10px] text-neutral-500 font-medium">Please wait 60 seconds and try again.</p>
           </div>
         );
       } else {
