@@ -295,8 +295,8 @@ function MainApp() {
     setError(null);
 
     try {
-      // Prioritize the user's custom Broya_Key from the Secrets menu
-      const apiKey = process.env.Broya_Key || process.env.GEMINI_API_KEY || process.env.API_KEY;
+      // Prioritize the user's custom VITE_BROYA_KEY from the Secrets menu
+      const apiKey = (import.meta as any).env.VITE_BROYA_KEY || process.env.GEMINI_API_KEY;
       
       if (!apiKey || apiKey === "") {
         console.error("API Key is missing from environment");
