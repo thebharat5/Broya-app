@@ -295,6 +295,7 @@ function MainApp() {
     setError(null);
 
     try {
+      // Prioritize the user's custom Broya_Key from the Secrets menu
       const apiKey = process.env.Broya_Key || process.env.GEMINI_API_KEY || process.env.API_KEY;
       
       if (!apiKey || apiKey === "") {
