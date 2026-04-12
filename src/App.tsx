@@ -5,10 +5,11 @@
 
 import React, { useState, useRef, ChangeEvent, useEffect, ErrorInfo, ReactNode } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key, PlayCircle, X, LogIn, LogOut, Shield, Users, BarChart3, TrendingUp, Search, Plus, Minus } from "lucide-react";
-import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
-import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key, PlayCircle, X, LogIn, LogOut, Shield, Users, BarChart3, TrendingUp, Search, Plus, Minus, Coins } from "lucide-react";
+import { supabase } from "./lib/supabase";
+import { Auth } from "@supabase/auth-ui-react";
+import { ThemeSupa } from "@supabase/auth-ui-shared";
+import { User as SupabaseUser } from "@supabase/supabase-js";
 
 declare global {
   interface Window {
@@ -116,7 +117,8 @@ export default function App() {
 
 function MainApp() {
   const [showLanding, setShowLanding] = useState(true);
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [credits, setCredits] = useState<number>(0);
   const [retryTimer, setRetryTimer] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -146,64 +148,50 @@ function MainApp() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const referenceFileInputRef = useRef<HTMLInputElement>(null);
 
+  const fetchCredits = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('users')
+      .select('credits_balance')
+      .eq('id', userId)
+      .single();
+    
+    if (data) {
+      setCredits(data.credits_balance);
+    }
+  };
+
   useEffect(() => {
-    // Auth Listener
-    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
+    // Supabase Auth Listener
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchCredits(session.user.id);
+        setIsAdmin(session.user.email === "thebharat555@gmail.com");
+      }
       setIsAuthReady(true);
+    });
 
-      if (firebaseUser) {
-        // Sync with Firestore
-        const userRef = doc(db, "users", firebaseUser.uid);
-        try {
-          const userDoc = await getDoc(userRef);
-          if (!userDoc.exists()) {
-            const newUser = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              role: firebaseUser.email === "thebharat555@gmail.com" ? "admin" : "user",
-              createdAt: serverTimestamp(),
-            };
-            await setDoc(userRef, newUser);
-            setIsAdmin(newUser.role === "admin");
-
-            // Increment total users in global stats
-            const statsRef = doc(db, "stats", "global");
-            await setDoc(statsRef, { totalUsers: increment(1) }, { merge: true });
-          } else {
-            const data = userDoc.data();
-            
-            // Always check email as fallback and update Firestore if needed
-            const isOwnerEmail = firebaseUser.email === "thebharat555@gmail.com";
-            if (isOwnerEmail) {
-              if (data.role !== "admin") {
-                await updateDoc(userRef, { 
-                  role: "admin"
-                });
-                setIsAdmin(true);
-              } else {
-                setIsAdmin(true);
-              }
-            } else {
-              setIsAdmin(data.role === "admin");
-            }
-          }
-        } catch (err) {
-          handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchCredits(session.user.id);
+        setIsAdmin(session.user.email === "thebharat555@gmail.com");
       } else {
+        setCredits(0);
         setIsAdmin(false);
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => subscription.unsubscribe();
   }, []);
 
   // Admin Data Fetching
   useEffect(() => {
     if (!isAdmin) return;
 
+    /*
     // Admin Stats Listener
     const unsubscribeStats = onSnapshot(doc(db, "stats", "global"), (doc) => {
       setGlobalStats(doc.data());
@@ -235,22 +223,28 @@ function MainApp() {
       unsubscribeStats();
       unsubscribeUsers();
     };
+    */
   }, [isAdmin]);
 
   const handleLogin = async () => {
     try {
       console.log("Attempting login...");
-      await signInWithPopup(auth, googleProvider);
-      console.log("Login successful");
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
     } catch (err: any) {
       console.error("Login failed", err);
-      alert("Login failed: " + (err.message || "Unknown error") + "\n\nCommon fix: Make sure 'broyaai.space' is added to 'Authorized domains' in your Firebase Console (Authentication -> Settings).");
+      alert("Login failed: " + (err.message || "Unknown error"));
     }
   };
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
       setShowAdminPanel(false);
     } catch (err) {
       console.error("Logout failed", err);
@@ -289,36 +283,33 @@ function MainApp() {
       return;
     }
 
+    if (!user) {
+      setError("Please log in to generate images.");
+      return;
+    }
+
+    if (credits <= 0) {
+      setError("You don't have enough credits. Please top up or watch an ad.");
+      return;
+    }
+
     setIsGenerating(true);
     setGenerationStatus("Analyzing product...");
     setError(null);
 
     try {
-      const sourceBase64 = sourceImage.split(",")[1];
-      const sourceMimeType = sourceImage.split(";")[0].split(":")[1];
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-      const parts: any[] = [
-        {
-          inlineData: {
-            data: sourceBase64,
-            mimeType: sourceMimeType,
-          },
-        },
-      ];
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in again.");
+      }
 
       setGenerationStatus("Designing background...");
       let prompt = "Create a professional Instagram post for this product. Top view (flat lay) of the product packaging on a vibrant, colourful, and appealing background. Realistic textures, professional lighting, high-end product photography style. The final image should be a complete scene.";
 
       if (referenceImage) {
         setGenerationStatus("Matching reference style...");
-        const refBase64 = referenceImage.split(",")[1];
-        const refMimeType = referenceImage.split(";")[0].split(":")[1];
-        parts.push({
-          inlineData: {
-            data: refBase64,
-            mimeType: refMimeType,
-          },
-        });
         prompt = "Create a professional Instagram post for the product in the first image. Use the second image as a STYLE reference. Match the aesthetic, lighting, and background style of the reference image exactly, but featuring the product from the first image.";
       }
 
@@ -327,7 +318,7 @@ function MainApp() {
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, parts, aspectRatio }),
+        body: JSON.stringify({ prompt, aspectRatio, token }),
       });
 
       if (!response.ok) {
@@ -335,24 +326,16 @@ function MainApp() {
         try {
           errorData = await response.json();
         } catch (e) {
-          // If the server returns HTML (like a 404 page), it means the backend isn't running yet
           throw new Error("Backend server is not reachable. If you just made changes, please wait a minute for the deployment to finish, or deploy the app again.");
         }
         
         let errorMessage = errorData.error || "Failed to generate image.";
-        const isCustom = errorData.isCustom;
         
-        if (errorMessage.includes("429") || errorMessage.toLowerCase().includes("quota") || errorData.status === 429) {
-          setRetryTimer(60);
+        if (response.status === 402) {
           setError(
             <div className="space-y-2">
-              <p className="font-bold text-red-400">API Limit Reached</p>
-              <p className="text-xs leading-relaxed">
-                {isCustom 
-                  ? "Your CUSTOM API key (VITE_BROYA_KEY) has hit its quota limit. Please check your Google Cloud Console billing or quota settings."
-                  : "The shared API key has hit its limit. Please ensure your VITE_BROYA_KEY is correctly set in the Secrets menu to avoid this."}
-              </p>
-              <p className="text-[10px] text-neutral-500 font-medium">Please wait 60 seconds and try again.</p>
+              <p className="font-bold text-red-400">Insufficient Credits</p>
+              <p className="text-xs leading-relaxed">{errorMessage}</p>
             </div>
           );
           return;
@@ -363,24 +346,10 @@ function MainApp() {
 
       const data = await response.json();
       
-      if (data.image) {
-        setGeneratedImage(`data:${data.image.mimeType};base64,${data.image.data}`);
-        
-        // Log generation
-        if (user) {
-          await addDoc(collection(db, "generations"), {
-            userId: user.uid,
-            model: "gemini-2.5-flash-image",
-            timestamp: serverTimestamp(),
-            type: "free"
-          });
-          
-          // Update global stats
-          await setDoc(doc(db, "stats", "global"), { 
-            totalGenerations: increment(1),
-            totalUsers: increment(0) // Just ensure doc exists
-          }, { merge: true });
-        }
+      if (data.imageUrl) {
+        setGeneratedImage(data.imageUrl);
+        // Refresh credits after successful generation
+        fetchCredits(user.id);
       } else {
         throw new Error("No image was generated. Please try again.");
       }
@@ -424,8 +393,12 @@ function MainApp() {
             
             {user ? (
               <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-lg">
+                  <Coins size={16} className="text-yellow-500" />
+                  <span className="text-sm font-bold text-white">{credits} Credits</span>
+                </div>
                 <div className="hidden sm:block text-right">
-                  <p className="text-xs font-bold text-white">{user.displayName}</p>
+                  <p className="text-xs font-bold text-white">{user.user_metadata?.full_name || user.email?.split('@')[0]}</p>
                   <p className="text-[10px] text-neutral-500">{user.email}</p>
                 </div>
                 <button 
