@@ -117,6 +117,7 @@ export default function App() {
 
 function MainApp() {
   const [showLanding, setShowLanding] = useState(true);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [credits, setCredits] = useState<number>(0);
   const [retryTimer, setRetryTimer] = useState(0);
@@ -147,6 +148,12 @@ function MainApp() {
   const [resolution, setResolution] = useState("1K");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const referenceFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (user) {
+      setShowLoginModal(false);
+    }
+  }, [user]);
 
   const fetchCredits = async (userId: string) => {
     const { data, error } = await supabase
@@ -226,20 +233,8 @@ function MainApp() {
     */
   }, [isAdmin]);
 
-  const handleLogin = async () => {
-    try {
-      console.log("Attempting login...");
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (error) throw error;
-    } catch (err: any) {
-      console.error("Login failed", err);
-      alert("Login failed: " + (err.message || "Unknown error"));
-    }
+  const handleLogin = () => {
+    setShowLoginModal(true);
   };
 
   const handleLogout = async () => {
@@ -284,7 +279,17 @@ function MainApp() {
     }
 
     if (!user) {
-      setError("Please log in to generate images.");
+      setError(
+        <div className="space-y-3">
+          <p>Please log in to generate images.</p>
+          <button 
+            onClick={() => setShowLoginModal(true)}
+            className="px-4 py-2 bg-[#9D88FF] text-white rounded-lg text-sm font-bold hover:bg-[#8B74FF] transition-all"
+          >
+            Log In Now
+          </button>
+        </div>
+      );
       return;
     }
 
@@ -705,6 +710,68 @@ function MainApp() {
           </div>
         </div>
       </footer>
+
+      {/* Login Modal */}
+      <AnimatePresence>
+        {showLoginModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 max-w-md w-full shadow-2xl relative"
+            >
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="absolute top-4 right-4 text-neutral-400 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+              
+              <div className="text-center mb-6">
+                <div className="flex justify-center mb-4">
+                  <BroyaLogo size={48} />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Welcome to Broya</h2>
+                <p className="text-neutral-400 text-sm">Sign in to generate stunning product photos.</p>
+              </div>
+
+              <Auth
+                supabaseClient={supabase}
+                appearance={{
+                  theme: ThemeSupa,
+                  variables: {
+                    default: {
+                      colors: {
+                        brand: '#9D88FF',
+                        brandAccent: '#8B74FF',
+                        inputBackground: '#171717',
+                        inputText: 'white',
+                        inputBorder: '#262626',
+                        inputBorderHover: '#9D88FF',
+                        inputBorderFocus: '#9D88FF',
+                      }
+                    }
+                  },
+                  className: {
+                    container: 'supabase-auth-container',
+                    button: 'supabase-auth-button',
+                    input: 'supabase-auth-input',
+                  }
+                }}
+                providers={['google']}
+                redirectTo={window.location.origin}
+                onlyThirdPartyProviders={false}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
