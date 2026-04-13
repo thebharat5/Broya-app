@@ -6,10 +6,9 @@
 import React, { useState, useRef, ChangeEvent, useEffect, ErrorInfo, ReactNode } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Key, PlayCircle, X, LogIn, LogOut, Shield, Users, BarChart3, TrendingUp, Search, Plus, Minus, Coins } from "lucide-react";
-import { supabase } from "./lib/supabase";
-import { Auth } from "@supabase/auth-ui-react";
-import { ThemeSupa } from "@supabase/auth-ui-shared";
-import { User as SupabaseUser } from "@supabase/supabase-js";
+import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
+import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { doc, getDoc, setDoc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
 
 declare global {
   interface Window {
@@ -123,7 +122,7 @@ function MainApp() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState("");
   const [isAuthLoading, setIsAuthLoading] = useState(false);
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [credits, setCredits] = useState<number>(0);
   const [retryTimer, setRetryTimer] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -161,42 +160,39 @@ function MainApp() {
   }, [user]);
 
   const fetchCredits = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('credits_balance')
-      .eq('id', userId)
-      .single();
-    
-    if (data) {
-      setCredits(data.credits_balance);
+    try {
+      const docRef = doc(db, 'users', userId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setCredits(docSnap.data().credits_balance || 0);
+      } else {
+        // Create user doc if it doesn't exist
+        await setDoc(docRef, { 
+          credits_balance: 10, 
+          email: auth.currentUser?.email,
+          createdAt: new Date().toISOString()
+        });
+        setCredits(10);
+      }
+    } catch (err) {
+      console.error("Error fetching credits", err);
     }
   };
 
   useEffect(() => {
-    // Supabase Auth Listener
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchCredits(session.user.id);
-        setIsAdmin(session.user.email === "thebharat555@gmail.com");
-      }
-      setIsAuthReady(true);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchCredits(session.user.id);
-        setIsAdmin(session.user.email === "thebharat555@gmail.com");
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        fetchCredits(currentUser.uid);
+        setIsAdmin(currentUser.email === "thebharat555@gmail.com");
       } else {
         setCredits(0);
         setIsAdmin(false);
       }
+      setIsAuthReady(true);
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   // Admin Data Fetching
@@ -247,13 +243,8 @@ function MainApp() {
     try {
       setIsAuthLoading(true);
       setAuthError("");
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (error) throw error;
+      await signInWithPopup(auth, googleProvider);
+      setShowLoginModal(false);
     } catch (err: any) {
       setAuthError(err.message || "Failed to sign in with Google");
       setIsAuthLoading(false);
@@ -267,18 +258,10 @@ function MainApp() {
     
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email: authEmail,
-          password: authPassword,
-        });
-        if (error) throw error;
-        setAuthError("Check your email for the confirmation link!");
+        await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        setShowLoginModal(false);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: authEmail,
-          password: authPassword,
-        });
-        if (error) throw error;
+        await signInWithEmailAndPassword(auth, authEmail, authPassword);
         setShowLoginModal(false);
       }
     } catch (err: any) {
@@ -290,7 +273,7 @@ function MainApp() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut(auth);
       setShowAdminPanel(false);
     } catch (err) {
       console.error("Logout failed", err);
@@ -354,8 +337,7 @@ function MainApp() {
     setError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await auth.currentUser?.getIdToken();
 
       if (!token) {
         throw new Error("Authentication token not found. Please log in again.");
