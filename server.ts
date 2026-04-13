@@ -3,12 +3,29 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { createClient } from "@supabase/supabase-js";
+import * as admin from "firebase-admin";
+import fs from "fs";
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize Firebase Admin
+const firebaseConfigPath = path.join(__dirname, 'firebase-applet-config.json');
+let firebaseConfig: any = {};
+if (fs.existsSync(firebaseConfigPath)) {
+  firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
+}
+
+admin.initializeApp({
+  projectId: firebaseConfig.projectId || process.env.VITE_FIREBASE_PROJECT_ID,
+});
+
+const db = admin.firestore();
+if (firebaseConfig.firestoreDatabaseId) {
+  db.settings({ databaseId: firebaseConfig.firestoreDatabaseId });
+}
 
 async function startServer() {
   const app = express();
@@ -28,45 +45,49 @@ async function startServer() {
       const { prompt, aspectRatio, token } = req.body;
       
       const falKey = process.env.FAL_KEY;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
       
-      if (!supabaseUrl || !supabaseAnonKey) {
-        return res.status(500).json({ error: "Supabase keys not configured." });
-      }
       if (!token) {
         return res.status(401).json({ error: "Unauthorized. Please log in." });
       }
 
-      // 1. Initialize Supabase with the user's token
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        global: { headers: { Authorization: `Bearer ${token}` } }
-      });
-
-      // 2. Get user to verify token
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
+      // 1. Verify token with Firebase Admin
+      let decodedToken;
+      try {
+        decodedToken = await admin.auth().verifyIdToken(token);
+      } catch (authError) {
         return res.status(401).json({ error: "Invalid token or user not found." });
       }
 
-      // 3. Deduct Credits securely via RPC
-      const { data: success, error: rpcError } = await supabase.rpc('deduct_credits', { 
-        user_id: user.id, 
-        amount: 1 
-      });
+      const userId = decodedToken.uid;
 
-      if (rpcError) {
-        console.error("RPC Error:", rpcError);
+      // 2. Deduct Credits securely
+      const userRef = db.collection('users').doc(userId);
+      let success = false;
+      
+      try {
+        await db.runTransaction(async (t) => {
+          const doc = await t.get(userRef);
+          if (!doc.exists) {
+            throw new Error("User not found");
+          }
+          const currentCredits = doc.data()?.credits_balance || 0;
+          if (currentCredits < 1) {
+            throw new Error("Insufficient credits");
+          }
+          t.update(userRef, { credits_balance: currentCredits - 1 });
+          success = true;
+        });
+      } catch (e: any) {
+        if (e.message === "Insufficient credits") {
+          return res.status(402).json({ error: "Insufficient credits. Please top up or watch an ad." });
+        }
+        console.error("Transaction Error:", e);
         return res.status(500).json({ error: "Failed to deduct credits." });
-      }
-
-      if (!success) {
-        return res.status(402).json({ error: "Insufficient credits. Please top up or watch an ad." });
       }
 
       let imageUrl = "";
 
-      // 4. Call API (Fal.ai if key exists, otherwise free testing API)
+      // 3. Call API (Fal.ai if key exists, otherwise free testing API)
       if (falKey) {
         console.log("Calling Fal.ai...");
         
@@ -95,7 +116,7 @@ async function startServer() {
           const errorText = await falResponse.text();
           console.error("Fal API Error:", errorText);
           // Refund credit if generation fails
-          await supabase.rpc('deduct_credits', { user_id: user.id, amount: -1 });
+          await userRef.update({ credits_balance: admin.firestore.FieldValue.increment(1) });
           return res.status(falResponse.status).json({ error: "Fal API Error: " + errorText });
         }
 
@@ -104,7 +125,7 @@ async function startServer() {
 
         if (!imageUrl) {
           // Refund credit if no image returned
-          await supabase.rpc('deduct_credits', { user_id: user.id, amount: -1 });
+          await userRef.update({ credits_balance: admin.firestore.FieldValue.increment(1) });
           return res.status(500).json({ error: "No image returned from Fal.ai" });
         }
       } else {
@@ -124,16 +145,17 @@ async function startServer() {
         imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&seed=${seed}`;
       }
 
-      // 5. Log the generation
-      await supabase.from('generations_log').insert({
-        user_id: user.id,
+      // 4. Log the generation
+      await db.collection('generations_log').add({
+        user_id: userId,
         prompt: prompt,
         image_url: imageUrl,
         cost: 1,
-        ip_address: req.ip
+        ip_address: req.ip,
+        created_at: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // 6. Return the image URL
+      // 5. Return the image URL
       res.json({ imageUrl });
       
     } catch (error: any) {
