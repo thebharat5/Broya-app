@@ -431,10 +431,6 @@ function MainApp() {
             
             {user ? (
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-lg">
-                  <Coins size={16} className="text-yellow-500" />
-                  <span className="text-sm font-bold text-white">{credits} Credits</span>
-                </div>
                 <div className="hidden sm:block text-right">
                   <p className="text-xs font-bold text-white">{user.user_metadata?.full_name || user.email?.split('@')[0]}</p>
                   <p className="text-[10px] text-neutral-500">{user.email}</p>
@@ -607,6 +603,16 @@ function MainApp() {
                   </select>
                 </div>
               </div>
+
+              {user && (
+                <div className="flex items-center justify-between px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-2xl mb-4">
+                  <div className="flex items-center gap-2">
+                    <Coins size={18} className="text-yellow-500" />
+                    <span className="text-sm font-medium text-neutral-300">Available Credits</span>
+                  </div>
+                  <span className="text-sm font-bold text-white">{credits}</span>
+                </div>
+              )}
 
               <button
                 onClick={generatePost}
