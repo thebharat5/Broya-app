@@ -415,7 +415,7 @@ function MainApp() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BroyaLogo size={48} />
-            <h1 className="text-xl font-bold tracking-tight">Broya</h1>
+            <h1 className="text-xl font-bold tracking-tight">Broya AI</h1>
           </div>
           
           <div className="flex items-center gap-4">
@@ -740,7 +740,7 @@ function MainApp() {
       <footer className="border-t border-neutral-800 mt-24 py-12 bg-neutral-950">
         <div className="max-w-5xl mx-auto px-6 text-center space-y-4">
           <p className="text-neutral-500 text-sm">
-            Copyright © 2026 Broya. All rights reserved.
+            Copyright © 2026 Broya AI. All rights reserved.
           </p>
           <div className="flex justify-center gap-6 text-neutral-800">
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -1055,7 +1055,7 @@ function LandingPage({ onStart }: { onStart: () => void }) {
           className="space-y-6"
         >
           <h2 className="text-5xl md:text-7xl font-black text-white tracking-tight leading-tight">
-            Broya <br />
+            Broya AI <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#9D88FF] to-purple-400">Your Product, Reimagined.</span>
           </h2>
           <p className="text-xl text-neutral-400 max-w-2xl mx-auto">
